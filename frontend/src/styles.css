@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Default semantic theme (standalone overlay may mirror an org palette via
+ * /brand.json and BrandProvider CSS variables). See frontend-style-guide.md
+ * for the standalone brand.json defaults.
+ * Semantic tokens follow the shadcn HSL-components convention so Tailwind
+ * classes like bg-primary / text-muted-foreground keep working everywhere.
+ */
+@layer base {
+  :root {
+    /* Official brand colors (raw, for direct use) */
+    --awo-amaranth: #e44763;
+    --awo-shadow-grey: #241e20;
+    --awo-carbon-black: #18181b;
+    --awo-white: #ffffff;
+
+    /* Reward tier palette — only for tier/achievement/sponsor contexts */
+    --awo-tier-bronze: #c76f43;
+    --awo-tier-silver: #a6a6a6;
+    --awo-tier-gold: #cfac3b;
+    --awo-tier-diamond: #7dc4e8;
+    --awo-tier-prestige: #e44763;
+    --awo-tier-prestige-alt: #8214ff;
+
+    --awo-shadow-card: 0 10px 30px rgba(36, 30, 32, 0.1);
+    --awo-shadow-pop: 0 16px 45px rgba(36, 30, 32, 0.16);
+
+    /* Semantic tokens — light theme (white surfaces, Shadow Grey text) */
+    --background: 0 0% 100%;
+    --foreground: 340 9% 13%;
+    --card: 0 0% 100%;
+    --card-foreground: 340 9% 13%;
+    --primary: 349 74% 59%;
+    --primary-hover: 349 58% 52%;
+    --primary-soft: 346 84% 95%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 16% 96%;
+    --secondary-foreground: 340 9% 13%;
+    --muted: 340 16% 96%;
+    --muted-foreground: 340 6% 41%;
+    --accent: 346 84% 95%;
+    --accent-foreground: 349 60% 42%;
+    --destructive: 0 76% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 32%;
+    --warning: 32 90% 38%;
+    --border: 344 19% 88%;
+    --input: 344 19% 88%;
+    --ring: 349 74% 59%;
+    --radius: 0.875rem;
+  }
+
+  .dark {
+    /* Cool dark background (Carbon Black) with warm dark surfaces (Shadow Grey) */
+    --background: 240 6% 10%;
+    --foreground: 340 10% 96%;
+    --card: 340 9% 13%;
+    --card-foreground: 340 10% 96%;
+    --primary: 349 74% 59%;
+    --primary-hover: 349 70% 65%;
+    --primary-soft: 349 35% 21%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 340 7% 18%;
+    --secondary-foreground: 340 10% 96%;
+    --muted: 340 7% 18%;
+    --muted-foreground: 340 6% 67%;
+    --accent: 349 28% 21%;
+    --accent-foreground: 349 85% 82%;
+    --destructive: 0 70% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 45% 58%;
+    --warning: 38 90% 60%;
+    --border: 340 6% 22%;
+    --input: 340 6% 22%;
+
+    --awo-shadow-card: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --awo-shadow-pop: 0 16px 45px rgba(0, 0, 0, 0.5);
+
+    /* Native <select> popups use OS styling; without this, option text stays light on a white list. */
+    color-scheme: dark;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family:
+      'Inter Variable',
+      Inter,
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+  }
+}

@@ -1,0 +1,34 @@
+# Local environment (compose interpolation; see .env.example)
+.env
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Go
+backend/bin/
+backend/server
+backend/server.exe
+backend/coverage.out
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.rsbuild/
+frontend/coverage/
+frontend/.env
+frontend/.env.local
+
+# Generated
+backend/internal/repository/sqlcgen/
+
+# CI (local mirror of GitLab cached sqlc binary)
+.ci-tools/
+
+# Misc
+*.log
+scripts/smoke/

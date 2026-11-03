@@ -1,0 +1,20 @@
+﻿{
+  "revision": 1,
+  "source": "standalone",
+  "productName": "Stash",
+  "organizationName": "Con Services",
+  "loginSubtitle": "Inventory & lost property",
+  "loginAccountHint": "Sign in with your organisation account — we'll send you to the identity provider and bring you right back.",
+  "loginButtonLabel": "Continue with organisation login",
+  "publicDeskName": "operations desk",
+  "claimHeaderSubtitle": "Claim your belongings",
+  "logoUrl": "/logo.svg",
+  "labelMarkColor": "#D93654",
+  "themeColor": "#18181b",
+  "colors": {
+    "primary": "#e44763",
+    "carbon": "#18181b",
+    "shadow": "#241e20"
+  },
+  "cssVariables": {}
+}

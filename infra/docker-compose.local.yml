@@ -1,0 +1,55 @@
+# Local tweaks layered on top of docker-compose.yml. Run from the repo root:
+#
+#   docker compose --env-file .env -f infra/docker-compose.yml -f infra/docker-compose.local.yml up -d --build
+#
+# (--env-file is required: with -f, compose looks for .env next to the first
+#  compose file, not in the cwd.)
+#
+# What this overlay does:
+#  - Publishes services on alternate host ports because the defaults tend to
+#    be occupied on dev machines (8080 by IDE tooling, 5432 by a WSL postgres).
+#    Container-internal traffic (nginx -> backend -> postgres) is unaffected;
+#    the SPA at http://localhost:3000 proxies /api itself.
+#  - Temporary DB browser (Adminer) at http://localhost:8082 — local dev only.
+#    Login: System PostgreSQL, Server postgres, User stash, Password stash, DB stash.
+#  - Loads access-config.toml via compose configs. Docker Desktop cannot read
+#    config files on network drives (Y:) — set STASH_ACCESS_CONFIG in .env to
+#    a local path (default: %LOCALAPPDATA%\stash\access-config.toml). Copy the
+#    repo file there after edits, then: docker compose … up -d backend
+#  - Enables guest /claim lookup (frontend + /api/public/lostfound) for local dev.
+
+configs:
+  stash-access:
+    file: ${STASH_ACCESS_CONFIG:-./access-config.toml}
+
+services:
+  backend:
+    ports:
+      - "8081:8080"
+    environment:
+      ACCESS_CONFIG_PATH: /etc/stash/access.toml
+      PUBLIC_LOSTFOUND_CLAIM_ENABLED: "true"
+    configs:
+      - source: stash-access
+        target: /etc/stash/access.toml
+  frontend:
+    build:
+      args:
+        VITE_PUBLIC_CLAIM_ENABLED: "true"
+  postgres:
+    ports: !override
+      - "5433:5432"
+
+  # Temporary local-only Postgres browser — not for production.
+  db-admin:
+    image: adminer:4
+    container_name: stash-db-admin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+

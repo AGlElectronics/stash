@@ -19,6 +19,7 @@ import (
 	"github.com/AGlElectronics/stash/backend/internal/config"
 	"github.com/AGlElectronics/stash/backend/internal/db"
 	"github.com/AGlElectronics/stash/backend/internal/files"
+	"github.com/AGlElectronics/stash/backend/internal/denlink"
 	httpx "github.com/AGlElectronics/stash/backend/internal/http"
 )
 
@@ -96,7 +97,11 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 		logger.Info().Msg("no access config file set; using built-in role catalog")
 	}
 
+	den := denlink.New(pool, denlink.Config{Slug: "stash", Version: Version, InternalURL: cfg.DenInternalURL}, logger)
+	go den.Run(ctx)
+
 	router := httpx.NewRouter(httpx.Deps{
+		Den:          den,
 		Config:       cfg,
 		Pool:         pool,
 		Logger:       logger,

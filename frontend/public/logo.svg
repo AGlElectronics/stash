@@ -1,4 +1,4 @@
 ﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 64" role="img" aria-label="Stash">
   <rect width="256" height="64" rx="12" fill="#18181b"/>
-  <text x="28" y="42" font-family="Georgia, serif" font-size="28" font-weight="700" fill="#e44763">Stash</text>
+  <text x="28" y="42" font-family="Georgia, serif" font-size="28" font-weight="700" fill="#5048e5">Stash</text>
 </svg>

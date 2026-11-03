@@ -14,6 +14,7 @@ import (
 
 	"github.com/AGlElectronics/stash/backend/internal/auth"
 	"github.com/AGlElectronics/stash/backend/internal/config"
+	"github.com/AGlElectronics/stash/backend/internal/denlink"
 	"github.com/AGlElectronics/stash/backend/internal/domain"
 	"github.com/AGlElectronics/stash/backend/internal/files"
 	"github.com/AGlElectronics/stash/backend/internal/service"
@@ -29,6 +30,8 @@ type Deps struct {
 	// Access is the config-file-driven role/permission catalog and OIDC
 	// group → role bindings. It is the only source of access control.
 	Access *auth.AccessConfig
+	// Den is the pairing with Den; nil means a fresh standalone client.
+	Den *denlink.Client
 }
 
 // NewRouter wires the chi router with middleware, CORS and routes.
@@ -73,13 +76,19 @@ func NewRouter(deps Deps, version string) http.Handler {
 	signouts := &signoutHandler{svc: service.NewSignoutService(deps.Pool)}
 	lostfound := &lostFoundHandler{svc: service.NewLostFoundService(deps.Pool)}
 	fileH := &fileHandler{svc: deps.Files}
-	settings := &settingsHandler{svc: service.NewSettingsService(deps.Pool)}
+	den := deps.Den
+	if den == nil {
+		den = denlink.New(deps.Pool, denlink.Config{Slug: "stash", Version: version}, deps.Logger)
+	}
+	settings := &settingsHandler{svc: service.NewSettingsService(deps.Pool).WithDen(den)}
 
 	publicLF := &publicLostFoundHandler{pool: deps.Pool, files: deps.Files}
 
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/health", health.get)
 		api.Get("/role-catalog", roleCatalogHandler(deps.Access))
+		api.Get("/brand", den.BrandHandler("/api/brand/logo"))
+		api.Get("/brand/logo", den.LogoHandler)
 
 		if deps.Config.PublicLostFoundClaimEnabled {
 			api.Route("/public/lostfound", func(pub chi.Router) {
@@ -157,6 +166,12 @@ func NewRouter(deps Deps, version string) http.Handler {
 			secure.Group(func(g chi.Router) {
 				g.Use(requireGlobal(domain.PermAccessManage))
 				g.Patch("/settings", settings.patch)
+				g.Route("/den", func(dr chi.Router) {
+					dr.Get("/", den.StatusHandler)
+					dr.Post("/pair", den.PairHandler)
+					dr.Post("/sync", den.SyncHandler)
+					dr.Delete("/pair", den.UnpairHandler)
+				})
 			})
 			secure.Route("/audit-log", auditLogHandler(deps.Pool))
 			secure.Get("/export/items.csv", exportItemsCSV(deps.Pool))

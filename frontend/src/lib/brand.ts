@@ -2,12 +2,13 @@
  * Brand pack for Stash.
  *
  * - standalone: loaded from /brand.json (local theme / deployment overlay)
- * - den: fetched from Den integration API after pairing (URL + token);
- *   media assets are requested via Den (Den reads its own S3 bucket).
+ * - den: the backend pairs with Den and serves Den's brand at /api/brand
+ *   (logo proxied by the backend); see withDenBrand.
  *
  * Never give another module credentials to Stash's bucket, and never read
  * Den's bucket directly from Stash.
  */
+import type { ModuleBrand } from '@/lib/moduleBrand';
 
 export type BrandSource = 'standalone' | 'den';
 
@@ -29,13 +30,12 @@ export type BrandPack = {
   publicDeskName: string;
   claimHeaderSubtitle: string;
   logoUrl: string;
+  /** Label mark fill; empty means the primary colour. */
   labelMarkColor: string;
   themeColor: string;
   colors: BrandColors;
-  /** Optional CSS custom properties applied to :root (e.g. "--primary": "349 74% 59%"). */
+  /** Optional CSS custom properties applied to :root (e.g. "--primary": "243 75% 59%"). */
   cssVariables?: Record<string, string>;
-  /** Present when source === 'den' — Den base URL used for media fetches. */
-  denBaseUrl?: string;
 };
 
 export const DEFAULT_BRAND: BrandPack = {
@@ -50,10 +50,10 @@ export const DEFAULT_BRAND: BrandPack = {
   publicDeskName: 'operations desk',
   claimHeaderSubtitle: 'Claim your belongings',
   logoUrl: '/logo.svg',
-  labelMarkColor: '#D93654',
+  labelMarkColor: '',
   themeColor: '#18181b',
   colors: {
-    primary: '#e44763',
+    primary: '#5048e5',
     carbon: '#18181b',
     shadow: '#241e20',
   },
@@ -103,7 +103,20 @@ export function normalizeBrand(raw: unknown, source: BrandSource = 'standalone')
       shadow: asString(colorsRaw.shadow, DEFAULT_BRAND.colors.shadow),
     },
     cssVariables,
-    denBaseUrl: typeof o.denBaseUrl === 'string' ? o.denBaseUrl : undefined,
+  };
+}
+
+/** Overlays Den's brand (organisation name, logo, primary colour) when paired. */
+export function withDenBrand(pack: BrandPack, den: ModuleBrand | undefined): BrandPack {
+  if (!den || den.source !== 'den') return pack;
+  const primary = typeof den.theme?.primary === 'string' ? den.theme.primary : pack.colors.primary;
+  return {
+    ...pack,
+    source: 'den',
+    revision: den.revision,
+    organizationName: den.organization_name || pack.organizationName,
+    logoUrl: den.logo_url || pack.logoUrl,
+    colors: { ...pack.colors, primary },
   };
 }
 
@@ -149,25 +162,4 @@ export async function loadStandaloneBrand(signal?: AbortSignal): Promise<BrandPa
   } catch {
     return { ...DEFAULT_BRAND };
   }
-}
-
-/**
- * Future: load brand metadata from Den using the pairing credential.
- * Media bytes must still be fetched via Den's media endpoint (Den owns the bucket).
- */
-export async function loadDenBrand(
-  denBaseUrl: string,
-  credential: string,
-  signal?: AbortSignal
-): Promise<BrandPack> {
-  const base = denBaseUrl.replace(/\/$/, '');
-  const res = await fetch(`${base}/api/v1/integration/branding`, {
-    signal,
-    headers: { Authorization: `Bearer ${credential}`, Accept: 'application/json' },
-  });
-  if (!res.ok) {
-    throw new Error(`Den branding fetch failed: HTTP ${res.status}`);
-  }
-  const json: unknown = await res.json();
-  return normalizeBrand({ ...(json as object), denBaseUrl: base }, 'den');
 }

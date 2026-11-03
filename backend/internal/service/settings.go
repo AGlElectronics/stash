@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -40,17 +41,50 @@ type SystemSettings struct {
 	// PreserveSacredLostFound gates the immortal LF-0001 test-item rule.
 	// Default false for reusable deployments; event overlays may enable it.
 	PreserveSacredLostFound bool `json:"preserve_sacred_lostfound"`
+
+	// ManagedBy is "den" while Stash is paired with Den; ManagedKeys are
+	// then read-only here. Never stored.
+	ManagedBy   string   `json:"managed_by,omitempty"`
+	ManagedKeys []string `json:"managed_keys,omitempty"`
 }
+
+// OrgSource supplies organisation settings from Den when Stash is paired.
+type OrgSource interface {
+	Paired() bool
+	OrganizationName() string
+}
+
+// denManagedKeys are owned by Den while paired.
+var denManagedKeys = []string{"organization_name"}
 
 type SettingsService struct {
 	pool *pgxpool.Pool
+	den  OrgSource
 }
 
 func NewSettingsService(pool *pgxpool.Pool) *SettingsService {
 	return &SettingsService{pool: pool}
 }
 
+// WithDen makes Get/PatchJSON follow Den for organisation-wide keys.
+func (s *SettingsService) WithDen(den OrgSource) *SettingsService {
+	s.den = den
+	return s
+}
+
 func (s *SettingsService) Get(ctx context.Context) (SystemSettings, error) {
+	out, err := s.stored(ctx)
+	if err != nil {
+		return out, err
+	}
+	if s.den != nil && s.den.Paired() {
+		out.OrganizationName = s.den.OrganizationName()
+		out.ManagedBy, out.ManagedKeys = "den", denManagedKeys
+	}
+	return out, nil
+}
+
+func (s *SettingsService) stored(ctx context.Context) (SystemSettings, error) {
 	var raw []byte
 	err := s.pool.QueryRow(ctx, `SELECT data FROM system_settings WHERE id = 1`).Scan(&raw)
 	if err != nil {
@@ -99,7 +133,7 @@ func (s SystemSettings) DefaultCurrencyOrEUR() string {
 // PatchJSON merges a partial JSON object into the stored settings document.
 // Unknown keys are preserved; only provided keys are overwritten.
 func (s *SettingsService) PatchJSON(ctx context.Context, patch json.RawMessage) (SystemSettings, error) {
-	cur, err := s.Get(ctx)
+	cur, err := s.stored(ctx)
 	if err != nil {
 		return SystemSettings{}, err
 	}
@@ -117,9 +151,18 @@ func (s *SettingsService) PatchJSON(ctx context.Context, patch json.RawMessage) 
 			return SystemSettings{}, httperror.BadRequest("invalid settings patch JSON")
 		}
 	}
+	paired := s.den != nil && s.den.Paired()
 	for k, v := range patchMap {
+		if k == "managed_by" || k == "managed_keys" {
+			continue
+		}
+		if paired && slices.Contains(denManagedKeys, k) {
+			return SystemSettings{}, httperror.Conflict(k + " is managed in Den (Admin → Organisation)")
+		}
 		baseMap[k] = v
 	}
+	delete(baseMap, "managed_by")
+	delete(baseMap, "managed_keys")
 	buf, err := json.Marshal(baseMap)
 	if err != nil {
 		return SystemSettings{}, httperror.Internal(err)

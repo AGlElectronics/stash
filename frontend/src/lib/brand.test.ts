@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_BRAND, normalizeBrand } from './brand';
+import { DEFAULT_BRAND, normalizeBrand, withDenBrand } from './brand';
 
 describe('normalizeBrand', () => {
   it('fills defaults for empty input', () => {
@@ -22,8 +22,27 @@ describe('normalizeBrand', () => {
   });
 
   it('accepts den source', () => {
-    const brand = normalizeBrand({ source: 'den', denBaseUrl: 'http://den.local' }, 'standalone');
+    const brand = normalizeBrand({ source: 'den' }, 'standalone');
     expect(brand.source).toBe('den');
-    expect(brand.denBaseUrl).toBe('http://den.local');
+  });
+});
+
+describe('withDenBrand', () => {
+  it('keeps the standalone pack when not paired', () => {
+    const pack = normalizeBrand({ organizationName: 'Local' });
+    expect(withDenBrand(pack, undefined)).toBe(pack);
+  });
+
+  it('overlays organisation, logo and primary from Den', () => {
+    const pack = normalizeBrand({ organizationName: 'Local' });
+    const brand = withDenBrand(pack, {
+      source: 'den', revision: 7, organization_name: 'Example Con', logo_url: '/api/brand/logo?v=1',
+      theme: { primary: '#112233' }, copy: {},
+    });
+    expect(brand.source).toBe('den');
+    expect(brand.organizationName).toBe('Example Con');
+    expect(brand.logoUrl).toBe('/api/brand/logo?v=1');
+    expect(brand.colors.primary).toBe('#112233');
+    expect(brand.productName).toBe(pack.productName);
   });
 });

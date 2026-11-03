@@ -44,6 +44,9 @@ type Config struct {
 	// Off by default; enable after the con or when kiosks are ready.
 	PublicLostFoundClaimEnabled bool
 
+	// DenInternalURL replaces the host of pasted Den pairing URLs (Docker).
+	DenInternalURL string
+
 	CORSAllowedOrigins []string
 
 	ShutdownTimeout time.Duration
@@ -70,6 +73,7 @@ func Load() (*Config, error) {
 		AccessConfigPath:            accessConfigPath(),
 		DevDefaultUser:              getEnv("DEV_DEFAULT_USER", "dev-admin"),
 		PublicLostFoundClaimEnabled: getEnvBool("PUBLIC_LOSTFOUND_CLAIM_ENABLED", false),
+		DenInternalURL:              getEnv("DEN_INTERNAL_URL", ""),
 		CORSAllowedOrigins:          splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
 		ShutdownTimeout:             getEnvDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 	}

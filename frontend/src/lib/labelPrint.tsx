@@ -58,7 +58,7 @@ export function labelPrintCss(preset: LabelPreset): string {
         page-break-before: always;
         break-before: page;
       }
-      .awoo-label-mark {
+      .brand-label-mark {
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }

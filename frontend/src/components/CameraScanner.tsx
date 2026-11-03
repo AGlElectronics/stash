@@ -173,8 +173,8 @@ export function CameraScanner({ stream, onResult, onError, wide = false }: Props
           <div
             className={
               wide
-                ? 'w-full h-[18%] min-h-[3rem] max-h-[5rem] border-2 border-awo-amaranth/90 rounded-sm'
-                : 'w-full max-w-lg h-[22%] min-h-[2.75rem] max-h-[4.5rem] border-2 border-awo-amaranth/80 rounded-sm shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]'
+                ? 'w-full h-[18%] min-h-[3rem] max-h-[5rem] border-2 border-primary/90 rounded-sm'
+                : 'w-full max-w-lg h-[22%] min-h-[2.75rem] max-h-[4.5rem] border-2 border-primary/80 rounded-sm shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]'
             }
             aria-hidden
           />

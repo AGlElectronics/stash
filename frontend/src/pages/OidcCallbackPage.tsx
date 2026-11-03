@@ -36,11 +36,11 @@ export function OidcCallbackPage() {
   }, [router]);
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-awo-carbon p-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-zinc-900 p-4">
       <Card className="w-full max-w-md border-white/10 shadow-pop">
         <CardContent className="p-6 flex flex-col items-center text-center gap-3">
-          <span className="rounded-pill bg-[#e44763]/15 p-3">
-            <PackageOpen className="w-7 h-7 text-awo-amaranth" />
+          <span className="rounded-pill bg-primary/15 p-3">
+            <PackageOpen className="w-7 h-7 text-primary" />
           </span>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

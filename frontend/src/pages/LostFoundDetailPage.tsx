@@ -117,7 +117,7 @@ export function LostFoundDetailPage() {
         </div>
       ) : null}
       {sacred ? (
-        <div className="mb-4 rounded-md border border-awo-amaranth/30 bg-awo-amaranth/10 px-4 py-3 text-sm">
+        <div className="mb-4 rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm">
           <p className="font-medium">Sacred test item</p>
           <p className="text-muted-foreground mt-0.5">
             {r.report_number} was the first report ever filed. It is immortal — editing and removing are not allowed.

@@ -65,22 +65,6 @@ export default {
           DEFAULT: 'hsl(var(--card) / <alpha-value>)',
           foreground: 'hsl(var(--card-foreground) / <alpha-value>)',
         },
-        awo: {
-          amaranth: '#e44763',
-          shadow: '#241e20',
-          carbon: '#18181b',
-          white: '#ffffff',
-          muted: '#f7f4f5',
-          border: '#e7dcdf',
-          tier: {
-            bronze: '#c76f43',
-            silver: '#a6a6a6',
-            gold: '#cfac3b',
-            diamond: '#7dc4e8',
-            prestige: '#e44763',
-            'prestige-alt': '#8214ff',
-          },
-        },
       },
       borderRadius: {
         lg: 'var(--radius)',
@@ -90,8 +74,8 @@ export default {
         pill: '999px',
       },
       boxShadow: {
-        card: 'var(--awo-shadow-card)',
-        pop: 'var(--awo-shadow-pop)',
+        card: 'var(--shadow-card)',
+        pop: 'var(--shadow-pop)',
       },
       maxWidth: {
         page: '1180px',

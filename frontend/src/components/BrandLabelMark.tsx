@@ -7,20 +7,21 @@ type Props = {
 
 /**
  * Org mark for label printing. Logo URL and fill colour come from the active
- * brand pack (standalone /brand.json or Den after pairing).
+ * brand pack (standalone /brand.json or Den after pairing); the fill falls
+ * back to the primary colour.
  */
 export function BrandLabelMark({ widthMm, heightMm }: Props) {
   const { brand } = useBrandOptional();
   const maskUrl = `url(${brand.logoUrl})`;
   return (
     <div
-      className="brand-label-mark awoo-label-mark shrink-0"
+      className="brand-label-mark shrink-0"
       role="img"
       aria-label={brand.organizationName || brand.productName}
       style={{
         width: `${widthMm}mm`,
         height: `${heightMm}mm`,
-        backgroundColor: brand.labelMarkColor,
+        backgroundColor: brand.labelMarkColor || brand.colors.primary,
         WebkitMaskImage: maskUrl,
         maskImage: maskUrl,
         WebkitMaskSize: 'contain',
@@ -34,6 +35,3 @@ export function BrandLabelMark({ widthMm, heightMm }: Props) {
     />
   );
 }
-
-/** @deprecated Use BrandLabelMark — kept for existing imports. */
-export const AwooLabelMark = BrandLabelMark;

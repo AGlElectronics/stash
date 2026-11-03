@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, History, KeyRound, MapPin, Tags } from 'lucide-react';
 import { ApiError, apiRequest } from '@/api/client';
 import { getSettings, patchSettings } from '@/api/settings';
+import { DenConnection } from '@/components/DenConnection';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -29,6 +30,7 @@ export function SettingsPage() {
       />
 
       <div className="space-y-5">
+        {can(PERMS.accessManage) ? <DenConnection base="/api/den" /> : null}
         <SystemSettingsCard />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -118,8 +120,8 @@ function SystemSettingsCard() {
       <CardHeader>
         <CardTitle>System defaults</CardTitle>
         <CardDescription>
-          Deployment-wide behaviour. Visual branding still comes from{' '}
-          <code className="rounded bg-muted px-1">/brand.json</code> or Den after pairing.
+          Deployment-wide behaviour. The look comes from Den when connected, otherwise from{' '}
+          <code className="rounded bg-muted px-1">/brand.json</code>.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -178,7 +180,7 @@ function SystemSettingsCard() {
               className="w-full rounded-md border border-border bg-background px-3 py-2"
               value={barcodePrefix}
               onChange={(e) => setBarcodePrefix(e.target.value)}
-              placeholder="AW"
+              placeholder="ST"
             />
           </label>
           <label className="space-y-1">

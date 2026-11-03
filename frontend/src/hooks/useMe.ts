@@ -38,6 +38,7 @@ export const PERMS = {
   categoryManage: 'category.manage',
   auditView: 'audit.view',
   exportCreate: 'export.create',
+  accessManage: 'access.manage',
   // Lost & Found — backend implements these (see docs/backend-plan-frontend-redesign.md)
   lostfoundView: 'lostfound.view',
   lostfoundCreate: 'lostfound.create',

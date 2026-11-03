@@ -38,7 +38,7 @@ export function LabelContent({ code, title, preset, moduleWidthMm, forPrint = fa
   const titleFontMm = Math.max(2, preset.heightMm * 0.12);
 
   // TEMP: logo removed from labels (printer struggles with the masked PNG).
-  // Content is centered across the full label. Restore <AwooLabelMark/> later.
+  // Content is centered across the full label. Restore <BrandLabelMark/> later.
   return (
     <div
       className={`${forPrint ? 'stash-label' : 'stash-label-preview overflow-hidden'} bg-white text-black ${forPrint ? '' : 'rounded-md border border-border shadow-sm'} flex flex-col items-center justify-center min-h-0`}

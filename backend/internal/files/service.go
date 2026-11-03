@@ -280,6 +280,18 @@ type DownloadResult struct {
 	ExpiresAt string `json:"expires_at"`
 }
 
+// Get returns the metadata row for a file.
+func (s *Service) Get(ctx context.Context, fileID uuid.UUID) (sqlcgen.File, error) {
+	row, err := sqlcgen.New(s.pool).GetFile(ctx, fileID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return sqlcgen.File{}, httperror.NotFound("file")
+		}
+		return sqlcgen.File{}, httperror.Internal(err)
+	}
+	return row, nil
+}
+
 func (s *Service) Download(ctx context.Context, fileID uuid.UUID) (DownloadResult, error) {
 	q := sqlcgen.New(s.pool)
 	row, err := q.GetFile(ctx, fileID)

@@ -176,6 +176,10 @@ role = "readonly"
 group = "stash-volunteer"          # → volunteer
 role = "volunteer"
 
+[[bindings]]
+group = "stash-dept-lead"          # → dept_lead (all departments)
+role = "dept_lead"
+
 # Scope to one department (optional):
 # [[bindings]]
 # group = "stash-dept-foo"

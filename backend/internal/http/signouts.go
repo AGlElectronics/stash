@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/AGlElectronics/stash/backend/internal/domain"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
 	"github.com/AGlElectronics/stash/backend/internal/repository/sqlcgen"
 	"github.com/AGlElectronics/stash/backend/internal/service"
@@ -129,13 +130,13 @@ func uuidPtrToString2(u *uuid.UUID) *string {
 }
 
 func (h *signoutHandler) routes(r chi.Router) {
-	r.Get("/", h.list)
-	r.Post("/", h.create)
-	r.Get("/{id}", h.get)
-	r.Post("/{id}/confirm", h.confirm)
-	r.Post("/{id}/return", h.returnLines)
-	r.Post("/{id}/cancel", h.cancel)
-	r.Post("/{id}/close", h.close)
+	r.With(requireAny(domain.PermSignoutView)).Get("/", h.list)
+	r.With(requireAny(domain.PermSignoutCreate)).Post("/", h.create)
+	r.With(requireAny(domain.PermSignoutView)).Get("/{id}", h.get)
+	r.With(requireAny(domain.PermSignoutConfirm)).Post("/{id}/confirm", h.confirm)
+	r.With(requireAny(domain.PermSignoutReturn)).Post("/{id}/return", h.returnLines)
+	r.With(requireAny(domain.PermSignoutCancel)).Post("/{id}/cancel", h.cancel)
+	r.With(requireAny(domain.PermSignoutClose)).Post("/{id}/close", h.close)
 }
 
 func (h *signoutHandler) list(w http.ResponseWriter, r *http.Request) {

@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/AGlElectronics/stash/backend/internal/auth"
 	"github.com/AGlElectronics/stash/backend/internal/domain"
 	"github.com/AGlElectronics/stash/backend/internal/files"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
@@ -106,31 +107,59 @@ func uuidToStrPtr(u *uuid.UUID) *string {
 }
 
 func (h *itemHandler) routes(r chi.Router) {
-	r.Get("/", h.list)
-	r.Post("/", h.create)
+	view := r.With(requireAny(domain.PermItemView))
+	view.Get("/", h.list)
+	r.With(requireAny(domain.PermItemCreate)).Post("/", h.create)
 	// Static prefixes must be registered before "/{id}" so chi's tree
 	// resolves them deterministically.
-	r.Get("/by-barcode/{code}", h.lookupByBarcode)
-	r.Get("/barcodes/peek-next", h.peekNextBarcode)
-	r.Get("/{id}", h.get)
-	r.Patch("/{id}", h.update)
-	r.Post("/{id}/assign-barcode", h.assignBarcode)
-	r.Post("/{id}/set-barcode", h.setBarcode)
+	view.Get("/by-barcode/{code}", h.lookupByBarcode)
+	r.With(requireAnyOf(domain.PermItemCreate, domain.PermItemEdit)).Get("/barcodes/peek-next", h.peekNextBarcode)
+	view.Get("/{id}", h.get)
+	r.With(h.onItem(domain.PermItemEdit)).Patch("/{id}", h.update)
+	r.With(h.onItem(domain.PermItemEdit)).Post("/{id}/assign-barcode", h.assignBarcode)
+	r.With(h.onItem(domain.PermItemEdit)).Post("/{id}/set-barcode", h.setBarcode)
 
-	r.Get("/{id}/availability", h.availability)
-	r.Get("/{id}/history", h.history)
+	view.Get("/{id}/availability", h.availability)
+	view.Get("/{id}/history", h.history)
 
-	r.Post("/{id}/move", h.move)
-	r.Post("/{id}/adjust-quantity", h.adjust)
-	r.Post("/{id}/damage", h.damage)
-	r.Post("/{id}/repair", h.repair)
-	r.Post("/{id}/lost", h.lost)
-	r.Post("/{id}/found", h.found)
-	r.Post("/{id}/retire", h.retire)
-	r.Post("/{id}/restore", h.restore)
+	r.With(h.onItem(domain.PermItemMove)).Post("/{id}/move", h.move)
+	r.With(h.onItem(domain.PermItemAdjust)).Post("/{id}/adjust-quantity", h.adjust)
+	r.With(h.onItem(domain.PermItemDamage)).Post("/{id}/damage", h.damage)
+	r.With(h.onItem(domain.PermItemDamage)).Post("/{id}/repair", h.repair)
+	r.With(h.onItem(domain.PermItemLose)).Post("/{id}/lost", h.lost)
+	r.With(h.onItem(domain.PermItemLose)).Post("/{id}/found", h.found)
+	r.With(h.onItem(domain.PermItemRetire)).Post("/{id}/retire", h.retire)
+	r.With(h.onItem(domain.PermItemRetire)).Post("/{id}/restore", h.restore)
 
-	r.Post("/{id}/primary-image", h.setPrimaryImage)
-	r.Delete("/{id}/primary-image", h.clearPrimaryImage)
+	r.With(h.onItem(domain.PermItemEdit)).Post("/{id}/primary-image", h.setPrimaryImage)
+	r.With(h.onItem(domain.PermItemEdit)).Delete("/{id}/primary-image", h.clearPrimaryImage)
+}
+
+// onItem requires perm globally or in the department managing the {id} item.
+func (h *itemHandler) onItem(perm string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := auth.RequireAny(r.Context(), perm); err != nil {
+				httperror.Render(w, r, err)
+				return
+			}
+			id, err := parseUUIDParam(r, "id")
+			if err != nil {
+				httperror.Render(w, r, err)
+				return
+			}
+			item, err := h.svc.Get(r.Context(), id)
+			if err != nil {
+				httperror.Render(w, r, err)
+				return
+			}
+			if err := auth.RequireIn(r.Context(), perm, item.ManagedByDepartmentID); err != nil {
+				httperror.Render(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 type setPrimaryImageReq struct {
@@ -374,6 +403,10 @@ func (h *itemHandler) create(w http.ResponseWriter, r *http.Request) {
 		httperror.Render(w, r, err)
 		return
 	}
+	if err := auth.RequireIn(r.Context(), domain.PermItemCreate, req.ManagedByDepartmentID); err != nil {
+		httperror.Render(w, r, err)
+		return
+	}
 	row, err := h.svc.Create(r.Context(), service.CreateItemInput{
 		Name:                  req.Name,
 		Description:           req.Description,
@@ -476,6 +509,12 @@ func (h *itemHandler) update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httperror.Render(w, r, err)
 		return
+	}
+	if req.ManagedByDepartmentID != nil {
+		if err := auth.RequireIn(r.Context(), domain.PermItemEdit, req.ManagedByDepartmentID); err != nil {
+			httperror.Render(w, r, err)
+			return
+		}
 	}
 	row, err := h.svc.Update(r.Context(), id, service.UpdateItemInput{
 		Name:                  req.Name,

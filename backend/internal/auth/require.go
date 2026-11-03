@@ -24,6 +24,21 @@ func RequireAny(ctx context.Context, perm string) error {
 	return httperror.New(httperror.CodeForbidden, "missing permission: "+perm)
 }
 
+// RequireAnyOf verifies the user has at least one of the permissions,
+// globally or in any department.
+func RequireAnyOf(ctx context.Context, perms ...string) error {
+	u, ok := FromContext(ctx)
+	if !ok {
+		return httperror.New(httperror.CodeUnauthorized, "not authenticated")
+	}
+	for _, p := range perms {
+		if u.HasAny(p) {
+			return nil
+		}
+	}
+	return httperror.New(httperror.CodeForbidden, "missing permission")
+}
+
 // RequireGlobal verifies the user has the permission globally. Use for
 // admin-only endpoints (e.g. managing roles, departments).
 func RequireGlobal(ctx context.Context, perm string) error {

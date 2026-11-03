@@ -134,6 +134,40 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+function NoAccess({ name }: { name: string }) {
+  return (
+    <div className="min-h-screen grid place-items-center bg-background text-foreground p-6">
+      <div className="max-w-sm w-full rounded-2xl border border-border bg-card p-6 text-center space-y-4">
+        <div className="flex justify-center">
+          <Wordmark />
+        </div>
+        <div className="space-y-1">
+          <h1 className="font-heading text-lg font-bold">No access to Stash</h1>
+          <p className="text-sm text-muted-foreground">
+            {name ? `${name}, your` : 'Your'} account is signed in but has no Stash role yet. Ask your
+            team lead or HR to give you access.
+          </p>
+        </div>
+        <div className="flex justify-center gap-2">
+          <ThemeToggle className="rounded-pill" />
+          {isOidcAuthMode() ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 text-sm px-3 py-2 rounded-pill text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => {
+                signOutKeycloak().catch(() => undefined);
+              }}
+            >
+              <LogOut className="w-4 h-4 shrink-0" />
+              Sign out
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Wordmark() {
   const { brand } = useBrand();
   return (
@@ -157,7 +191,7 @@ function Wordmark() {
 
 export function Layout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { can } = useMe();
+  const { can, me } = useMe();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
 
@@ -167,6 +201,10 @@ export function Layout() {
   }, [pathname]);
 
   const canScan = can(PERMS.itemView);
+
+  if (me && me.permissions.length === 0) {
+    return <NoAccess name={me.display_name || me.email} />;
+  }
 
   const footer = (
     <div className="mt-auto p-2 border-t border-border space-y-0.5">

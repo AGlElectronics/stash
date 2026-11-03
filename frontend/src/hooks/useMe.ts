@@ -3,14 +3,16 @@ import { getMe } from '@/api/me';
 
 /**
  * Current user identity + effective permissions (computed server-side from
- * the OIDC role -> permission config). Cached for the session; permission
- * checks in the UI are UX-only — the backend enforces everything.
+ * the OIDC role -> permission config). Refetched on focus so group changes
+ * show up quickly; permission checks in the UI are UX-only — the backend
+ * enforces everything.
  */
 export function useMe() {
   const query = useQuery({
     queryKey: ['me'],
     queryFn: getMe,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const permissions = query.data?.permissions ?? [];

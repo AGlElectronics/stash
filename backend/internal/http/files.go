@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/AGlElectronics/stash/backend/internal/auth"
 	"github.com/AGlElectronics/stash/backend/internal/domain"
 	"github.com/AGlElectronics/stash/backend/internal/files"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
@@ -48,13 +50,58 @@ func toFileDTO(f sqlcgen.File) fileDTO {
 }
 
 func (h *fileHandler) routes(r chi.Router) {
-	r.Post("/presign-upload", h.presignUpload)
-	r.Post("/upload", h.upload)
-	r.Post("/", h.register)
+	upload := r.With(requireAny(domain.PermFileUpload))
+	upload.Post("/presign-upload", h.presignUpload)
+	upload.Post("/upload", h.upload)
+	upload.Post("/", h.register)
 	r.Get("/", h.list)
-	r.Get("/{id}/download", h.download)
-	r.Get("/{id}/raw", h.raw)
-	r.Delete("/{id}", h.delete)
+	r.With(h.onFile(false)).Get("/{id}/download", h.download)
+	r.With(h.onFile(false)).Get("/{id}/raw", h.raw)
+	r.With(requireAny(domain.PermFileUpload), h.onFile(true)).Delete("/{id}", h.delete)
+}
+
+// entityAccess checks the permissions a file inherits from what it is
+// attached to: view access to read, create/edit access to change.
+func entityAccess(ctx context.Context, entityType string, write bool) error {
+	var perms []string
+	switch entityType {
+	case "item":
+		perms = []string{domain.PermItemView}
+		if write {
+			perms = []string{domain.PermItemCreate, domain.PermItemEdit}
+		}
+	case "lostfound":
+		perms = []string{domain.PermLostfoundView}
+		if write {
+			perms = []string{domain.PermLostfoundCreate, domain.PermLostfoundEdit}
+		}
+	default:
+		return httperror.BadRequest("unsupported entity_type: " + entityType)
+	}
+	return auth.RequireAnyOf(ctx, perms...)
+}
+
+// onFile loads the {id} file and applies entityAccess for its owner.
+func (h *fileHandler) onFile(write bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id, err := parseUUIDParam(r, "id")
+			if err != nil {
+				httperror.Render(w, r, err)
+				return
+			}
+			row, err := h.svc.Get(r.Context(), id)
+			if err != nil {
+				httperror.Render(w, r, err)
+				return
+			}
+			if err := entityAccess(r.Context(), row.EntityType, write); err != nil {
+				httperror.Render(w, r, err)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // raw streams the object bytes through the backend so the browser never
@@ -131,6 +178,10 @@ func (h *fileHandler) upload(w http.ResponseWriter, r *http.Request) {
 		httperror.Render(w, r, httperror.BadRequest("entity_id must be a UUID"))
 		return
 	}
+	if err := entityAccess(r.Context(), entityType, true); err != nil {
+		httperror.Render(w, r, err)
+		return
+	}
 
 	fileType := strings.TrimSpace(r.FormValue("file_type"))
 	if fileType == "" {
@@ -175,6 +226,10 @@ func (h *fileHandler) presignUpload(w http.ResponseWriter, r *http.Request) {
 		httperror.Render(w, r, err)
 		return
 	}
+	if err := entityAccess(r.Context(), req.EntityType, true); err != nil {
+		httperror.Render(w, r, err)
+		return
+	}
 	res, err := h.svc.PresignUpload(r.Context(), files.PresignUploadInput{
 		EntityType:       req.EntityType,
 		EntityID:         req.EntityID,
@@ -205,6 +260,10 @@ func (h *fileHandler) register(w http.ResponseWriter, r *http.Request) {
 		httperror.Render(w, r, err)
 		return
 	}
+	if err := entityAccess(r.Context(), req.EntityType, true); err != nil {
+		httperror.Render(w, r, err)
+		return
+	}
 	row, err := h.svc.Register(r.Context(), files.RegisterInput{
 		EntityType:       req.EntityType,
 		EntityID:         req.EntityID,
@@ -231,6 +290,10 @@ func (h *fileHandler) list(w http.ResponseWriter, r *http.Request) {
 	}
 	if entityType == "" || entityID == nil {
 		httperror.Render(w, r, httperror.BadRequest("entity_type and entity_id are required"))
+		return
+	}
+	if err := entityAccess(r.Context(), entityType, false); err != nil {
+		httperror.Render(w, r, err)
 		return
 	}
 	rows, err := h.svc.List(r.Context(), files.ListFilesInput{

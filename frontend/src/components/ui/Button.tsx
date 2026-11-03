@@ -1,5 +1,5 @@
 import { forwardRef } from 'react';
-import { Link } from '@tanstack/react-router';
+import { createLink } from '@tanstack/react-router';
 import { cn } from '@/lib/utils';
 
 type Variant = 'primary' | 'secondary' | 'destructive' | 'ghost' | 'outline';
@@ -50,12 +50,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return <button ref={ref} className={buttonClasses({ variant, size, className })} {...rest} />;
 });
 
-type LinkButtonProps = React.ComponentProps<typeof Link> & {
+type ButtonAnchorProps = React.AnchorHTMLAttributes<HTMLAnchorElement> & {
   variant?: Variant;
   size?: Size;
 };
 
-/** TanStack Router Link styled exactly like a Button. */
-export function LinkButton({ className, variant = 'primary', size = 'md', ...rest }: LinkButtonProps) {
-  return <Link className={buttonClasses({ variant, size, className: className as string })} {...rest} />;
-}
+const ButtonAnchor = forwardRef<HTMLAnchorElement, ButtonAnchorProps>(function ButtonAnchor(
+  { className, variant = 'primary', size = 'md', ...rest },
+  ref
+) {
+  return <a ref={ref} className={buttonClasses({ variant, size, className })} {...rest} />;
+});
+
+/** TanStack Router Link styled exactly like a Button (route params stay type-checked). */
+export const LinkButton = createLink(ButtonAnchor);

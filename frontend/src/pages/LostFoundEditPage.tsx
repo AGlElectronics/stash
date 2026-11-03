@@ -12,7 +12,7 @@ import { uploadFile, listFiles } from '@/api/files';
 import { fetchFileBlobURL } from '@/api/files';
 import { WebcamPhotoCapture } from '@/components/WebcamPhotoCapture';
 import { Button, LinkButton } from '@/components/ui/Button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Dialog } from '@/components/ui/Dialog';
 import { Field, Input, Textarea } from '@/components/ui/Input';
 import { PageContainer, PageHeader } from '@/components/ui/PageHeader';

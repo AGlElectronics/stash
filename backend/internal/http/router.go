@@ -87,8 +87,8 @@ func NewRouter(deps Deps, version string) http.Handler {
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/health", health.get)
 		api.Get("/role-catalog", roleCatalogHandler(deps.Access))
-		api.Get("/brand", den.BrandHandler("/api/brand/logo"))
-		api.Get("/brand/logo", den.LogoHandler)
+		api.Get("/brand", den.BrandHandler("/api/brand"))
+		api.Get("/brand/{role}", den.AssetHandler)
 
 		if deps.Config.PublicLostFoundClaimEnabled {
 			api.Route("/public/lostfound", func(pub chi.Router) {
@@ -101,6 +101,15 @@ func NewRouter(deps Deps, version string) http.Handler {
 		api.Group(func(secure chi.Router) {
 			secure.Use(authMW)
 			secure.Get("/me", meHandler)
+			prefs := den.PreferencesHandler(func(r *http.Request) (string, string, bool) {
+				u, ok := auth.FromContext(r.Context())
+				if !ok || u.OIDCSubject == "" || deps.Config.OIDCIssuerURL == "" {
+					return "", "", false
+				}
+				return deps.Config.OIDCIssuerURL, u.OIDCSubject, true
+			})
+			secure.Get("/me/preferences", prefs)
+			secure.Put("/me/preferences", prefs)
 
 			// Reads always require at least the matching view permission anywhere.
 			// Writes are gated per-method via small inline groups so the same

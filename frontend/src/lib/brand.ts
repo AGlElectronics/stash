@@ -30,6 +30,10 @@ export type BrandPack = {
   publicDeskName: string;
   claimHeaderSubtitle: string;
   logoUrl: string;
+  /** Picture behind the login screen ("" = none), "panel" | "centered", caption. */
+  loginBackgroundUrl: string;
+  loginLayout: string;
+  loginCaption: string;
   /** Label mark fill; empty means the primary colour. */
   labelMarkColor: string;
   themeColor: string;
@@ -50,6 +54,9 @@ export const DEFAULT_BRAND: BrandPack = {
   publicDeskName: 'operations desk',
   claimHeaderSubtitle: 'Claim your belongings',
   logoUrl: '/logo.svg',
+  loginBackgroundUrl: '',
+  loginLayout: 'panel',
+  loginCaption: '',
   labelMarkColor: '',
   themeColor: '#18181b',
   colors: {
@@ -95,6 +102,9 @@ export function normalizeBrand(raw: unknown, source: BrandSource = 'standalone')
     publicDeskName: asString(o.publicDeskName, DEFAULT_BRAND.publicDeskName),
     claimHeaderSubtitle: asString(o.claimHeaderSubtitle, DEFAULT_BRAND.claimHeaderSubtitle),
     logoUrl: asString(o.logoUrl, DEFAULT_BRAND.logoUrl),
+    loginBackgroundUrl: asString(o.loginBackgroundUrl, DEFAULT_BRAND.loginBackgroundUrl),
+    loginLayout: asString(o.loginLayout, DEFAULT_BRAND.loginLayout),
+    loginCaption: asString(o.loginCaption, DEFAULT_BRAND.loginCaption),
     labelMarkColor: asString(o.labelMarkColor, DEFAULT_BRAND.labelMarkColor),
     themeColor: asString(o.themeColor, DEFAULT_BRAND.themeColor),
     colors: {
@@ -116,6 +126,9 @@ export function withDenBrand(pack: BrandPack, den: ModuleBrand | undefined): Bra
     revision: den.revision,
     organizationName: den.organization_name || pack.organizationName,
     logoUrl: den.logo_url || pack.logoUrl,
+    loginBackgroundUrl: den.login_background_url || pack.loginBackgroundUrl,
+    loginLayout: asString(den.copy?.login_layout, pack.loginLayout),
+    loginCaption: asString(den.copy?.login_caption, pack.loginCaption),
     colors: { ...pack.colors, primary },
   };
 }

@@ -195,6 +195,17 @@ Build the **cluster** frontend image with `NGINX_CONF=nginx.k8s.conf` so `/api` 
 
 Object storage: production should use a **private** managed S3 bucket. Until that exists, you can point `S3_*` at a **temporary MinIO** (or any S3-compatible API) — see `deploy/kubernetes/examples/` and `docs/deployment-argocd.md`.
 
+## Backups
+
+In the full Con Services stack, Den's operator backs up Stash's database and
+bucket every night along with everything else (see
+[docs/operations.md](../docs/operations.md)).
+
+**Run standalone, or on a database server Den's operator doesn't manage,
+Stash is not backed up by anything. That is the administrator's job:**
+schedule a `pg_dump --format=custom` of the Stash database and a copy of its
+bucket, encrypt both, and keep them somewhere other than the server.
+
 ## Roadmap
 
 - v0.5 — Telegram bot for mobile sign-outs ("walk to logistics with no laptop").

@@ -1,39 +1,41 @@
-import { useCallback, useSyncExternalStore } from 'react';
-import { Moon, Sun } from 'lucide-react';
-import { applyTheme, getAppliedTheme, type ThemePreference } from '@/lib/theme';
+import { Monitor, Moon, Sun } from 'lucide-react';
+import { useThemePreference, type ThemePreference } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 
-function subscribe(onStoreChange: () => void) {
-  const el = document.documentElement;
-  const obs = new MutationObserver(() => onStoreChange());
-  obs.observe(el, { attributes: true, attributeFilter: ['class'] });
-  return () => obs.disconnect();
-}
+const OPTIONS: { value: ThemePreference; label: string; Icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', Icon: Sun },
+  { value: 'system', label: 'System', Icon: Monitor },
+  { value: 'dark', label: 'Dark', Icon: Moon },
+];
 
-function getServerSnapshot(): ThemePreference {
-  return 'dark';
-}
-
+/** Light / System / Dark switch; the choice is shared by every Con Services app. */
 export function ThemeToggle({ className }: { className?: string }) {
-  const mode = useSyncExternalStore(subscribe, getAppliedTheme, getServerSnapshot);
-
-  const onClick = useCallback(() => {
-    const next: ThemePreference = mode === 'dark' ? 'light' : 'dark';
-    applyTheme(next);
-  }, [mode]);
-
+  const { preference, setPreference } = useThemePreference();
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'w-full flex items-center gap-2 text-sm px-3 py-2 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors',
-        className
-      )}
-      aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+    <div
+      role="radiogroup"
+      aria-label="Colour theme"
+      className={cn('flex w-full items-center gap-0.5 rounded-pill border border-border bg-background p-0.5', className)}
     >
-      {mode === 'dark' ? <Sun className="w-4 h-4 shrink-0" /> : <Moon className="w-4 h-4 shrink-0" />}
-      <span>{mode === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-    </button>
+      {OPTIONS.map(({ value, label, Icon }) => {
+        const active = preference === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => setPreference(value)}
+            className={cn(
+              'flex flex-1 items-center justify-center gap-1.5 rounded-pill px-2 py-1.5 text-xs font-medium transition-colors',
+              active ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }

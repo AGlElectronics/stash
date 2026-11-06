@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useThemeSync } from '@/lib/theme';
 import { useBrand } from '@/brand/BrandProvider';
 
 type NavItem = {
@@ -194,6 +195,7 @@ export function Layout() {
   const { can, me } = useMe();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  useThemeSync('/api/me/preferences');
 
   // Close the mobile drawer whenever navigation happens.
   useEffect(() => {

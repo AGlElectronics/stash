@@ -36,7 +36,7 @@ export function OidcCallbackPage() {
   }, [router]);
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center bg-zinc-900 p-4">
+    <div className="relative min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md border-white/10 shadow-pop">
         <CardContent className="p-6 flex flex-col items-center text-center gap-3">
           <span className="rounded-pill bg-primary/15 p-3">

@@ -79,17 +79,19 @@ func NewRouter(deps Deps, version string) http.Handler {
 	fileH := &fileHandler{svc: deps.Files}
 	den := deps.Den
 	if den == nil {
-		den = denlink.New(deps.Pool, denlink.Config{Slug: "stash", Version: version}, deps.Logger)
+		den = denlink.New(deps.Pool, denlink.Config{Slug: "stash", Version: version, Mode: deps.Config.DenMode}, deps.Logger)
 	}
 	settings := &settingsHandler{svc: service.NewSettingsService(deps.Pool).WithDen(den)}
 
 	publicLF := &publicLostFoundHandler{pool: deps.Pool, files: deps.Files}
 
 	r.Route("/api", func(api chi.Router) {
+		api.Use(den.RequirePaired)
 		api.Get("/health", health.get)
 		api.Get("/role-catalog", roleCatalogHandler(deps.Access))
 		api.Get("/brand", den.BrandHandler("/api/brand"))
 		api.Get("/brand/{role}", den.AssetHandler)
+		api.Get("/den/state", den.StateHandler)
 
 		if deps.Config.PublicLostFoundClaimEnabled {
 			api.Route("/public/lostfound", func(pub chi.Router) {

@@ -98,7 +98,10 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 		logger.Info().Msg("no access config file set; using built-in role catalog")
 	}
 
-	den := denlink.New(pool, denlink.Config{Slug: "stash", Version: Version, InternalURL: cfg.DenInternalURL}, logger)
+	den := denlink.New(pool, denlink.Config{Slug: "stash", Version: Version, InternalURL: cfg.DenInternalURL, Mode: cfg.DenMode}, logger)
+	if err := den.Restore(ctx); err != nil {
+		logger.Warn().Err(err).Msg("den link: load failed")
+	}
 	go den.Run(ctx)
 
 	router := httpx.NewRouter(httpx.Deps{

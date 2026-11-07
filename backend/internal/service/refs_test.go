@@ -14,10 +14,10 @@ import (
 // --- mocks ---
 
 type mockDeptResolver struct {
-	getByName    func(ctx context.Context, name string) (sqlcgen.Department, error)
-	createDept   func(ctx context.Context, arg sqlcgen.CreateDepartmentParams) (sqlcgen.Department, error)
-	getCalls     int
-	createCalls  int
+	getByName   func(ctx context.Context, name string) (sqlcgen.Department, error)
+	createDept  func(ctx context.Context, arg sqlcgen.CreateDepartmentParams) (sqlcgen.Department, error)
+	getCalls    int
+	createCalls int
 }
 
 func (m *mockDeptResolver) GetDepartmentByName(ctx context.Context, name string) (sqlcgen.Department, error) {
@@ -337,4 +337,3 @@ func TestResolveLocationRefTx(t *testing.T) {
 		}
 	})
 }
-

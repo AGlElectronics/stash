@@ -4,7 +4,7 @@ Reusable inventory module for Con Services (AGl Electronics). Tracks items, loca
 
 ## What's in the box
 
-- **Backend** — Go 1.25, [chi](https://github.com/go-chi/chi), PostgreSQL via [pgx](https://github.com/jackc/pgx) and [sqlc](https://sqlc.dev), [Goose](https://github.com/pressly/goose) migrations, S3-compatible object storage (MinIO in dev), [zerolog](https://github.com/rs/zerolog) structured logs.
+- **Backend** — Go 1.27, [chi](https://github.com/go-chi/chi), PostgreSQL via [pgx](https://github.com/jackc/pgx) and [sqlc](https://sqlc.dev), [Goose](https://github.com/pressly/goose) migrations, S3-compatible object storage (SeaweedFS in dev), [zerolog](https://github.com/rs/zerolog) structured logs.
 - **Frontend** — React 19, [TanStack Router](https://tanstack.com/router) + [TanStack Query](https://tanstack.com/query), [Rsbuild](https://rsbuild.dev) (no Vite per project policy), Tailwind + shadcn-style components, PWA manifest + service worker.
 - **Auth** — Two modes:
   - `dev`: `X-Dev-User` header bypass (local dev, fast iteration).
@@ -26,7 +26,7 @@ stash/
       domain/       # enums and string constants for permissions/roles
       events/       # per-item lifecycle event writer
       audit/        # forensic audit log writer
-      files/        # MinIO/S3 client + service
+      files/        # S3 client + service
       http/         # chi router + per-resource handlers + DTOs
       service/      # business logic (transactional, audit-emitting)
       repository/   # sqlc-generated typed queries (in sqlcgen/)
@@ -59,8 +59,7 @@ docker compose -f infra/docker-compose.yml up --build
 This brings up:
 
 - `postgres` on `:5432` (database `stash`, user `stash`, password `stash`)
-- `minio` on `:9000` (console on `:9001`, credentials `stash`/`stashstash`)
-- `minio-init` (one-shot to create the `stash-dev` bucket)
+- `s3` on `:9000` (SeaweedFS, S3 API only, credentials `stash`/`stashstash`; creates the `stash-data-dev` bucket on start)
 - `backend` on `:8080` (runs migrations on boot)
 - `frontend` on `:3000`
 
@@ -68,7 +67,7 @@ Visit [http://localhost:3000](http://localhost:3000). Auth is in `dev` mode — 
 
 ### 2. Local development (without Docker)
 
-Requires Go 1.25+, Node 20+, a running PostgreSQL, and a MinIO (or S3) endpoint.
+Requires Go 1.27.3+, Node 20+, a running PostgreSQL, and an S3-compatible endpoint (for example the `s3` service of the Compose stack).
 
 ```sh
 # Backend
@@ -86,10 +85,11 @@ npm run dev                  # http://localhost:3000, proxies /api to :8080
 All backend config is environment-driven; see [.env.example](.env.example). Required for production:
 
 - `DATABASE_URL` — Postgres DSN.
-- `S3_*` — Bucket and credentials for object storage (MinIO works fine).
+- `S3_*` — Bucket and credentials for object storage (any S3-compatible service).
 - `AUTH_MODE=oidc`, `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID` — for real auth. Optional `OIDC_AUDIENCE` if it differs from the client id.
 - `ACCESS_CONFIG_PATH` — path to the access config TOML file (required in OIDC mode, see below). Legacy alias: `OIDC_BINDINGS_PATH`.
 - `CORS_ALLOWED_ORIGINS` — comma-separated list of allowed origins for the SPA.
+- `TRUSTED_PROXY_CIDRS` — proxies whose `X-Forwarded-For` is believed; the default private ranges fit the Gateway, nginx and Caddy. See [Client IP addresses](https://aglelectronics.github.io/con-services/operations/production/#client-ip-addresses).
 
 ## RBAC model
 
@@ -193,7 +193,7 @@ From repo root: `pwsh -File scripts/smoke/smoke-test.ps1` (after starting the st
 
 Build the **cluster** frontend image with `NGINX_CONF=nginx.k8s.conf` so `/api` proxies to the `stash-backend` Service (see `infra/Dockerfile.frontend`).
 
-Object storage: production should use a **private** managed S3 bucket. Until that exists, you can point `S3_*` at a **temporary MinIO** (or any S3-compatible API) — see `deploy/kubernetes/examples/` and `docs/deployment-argocd.md`.
+Object storage: production should use a **private** managed S3 bucket. Until that exists, you can point `S3_*` at a **temporary** S3-compatible server — see `deploy/kubernetes/examples/` and `docs/deployment-argocd.md`.
 
 ## Backups
 

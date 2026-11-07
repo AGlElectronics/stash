@@ -1,10 +1,11 @@
 // Typed fetch wrapper. Always sends credentials in dev mode (X-Dev-User
 // header) and a Bearer token in OIDC mode (token resolved by AuthProvider).
 
-const API_BASE_URL =
+import { runtimeConfig } from '@/runtime-config';
+
+const apiBaseUrl = () =>
   (typeof process !== 'undefined' ? process.env.STASH_API_BASE_URL : undefined) ??
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) ??
-  '';
+  runtimeConfig().apiBaseUrl;
 
 export type ApiErrorBody = {
   error: {
@@ -50,7 +51,7 @@ type RequestOpts = {
 };
 
 export async function apiRequest<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-  const url = new URL(path.startsWith('http') ? path : `${API_BASE_URL}${path}`, window.location.origin);
+  const url = new URL(path.startsWith('http') ? path : `${apiBaseUrl()}${path}`, window.location.origin);
   if (opts.query) {
     for (const [k, v] of Object.entries(opts.query)) {
       if (v === undefined || v === null) continue;
@@ -99,7 +100,7 @@ export async function apiRequest<T>(path: string, opts: RequestOpts = {}): Promi
  * caller can decide how to read it (e.g. .blob() for binary).
  */
 export async function fetchAuthed(path: string, init: RequestInit = {}): Promise<Response> {
-  const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
+  const url = path.startsWith('http') ? path : `${apiBaseUrl()}${path}`;
   const auth = await authHeadersResolver();
   const headers = new Headers(init.headers as HeadersInit | undefined);
   for (const [k, v] of Object.entries(auth)) {
@@ -119,7 +120,7 @@ export async function apiUpload<T>(
   opts: { signal?: AbortSignal } = {}
 ): Promise<T> {
   const url = new URL(
-    path.startsWith('http') ? path : `${API_BASE_URL}${path}`,
+    path.startsWith('http') ? path : `${apiBaseUrl()}${path}`,
     window.location.origin
   );
 

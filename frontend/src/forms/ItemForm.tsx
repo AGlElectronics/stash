@@ -12,13 +12,13 @@ import { useCategories, useDepartments, useLocations } from '@/hooks/useReferenc
 import { buildLocationPathMap } from '@/lib/locationPath';
 import { creatablePickFromDom } from '@/lib/resolveCreatableRef';
 
-const refPickSchema: z.ZodType<CreatablePick> = z.object({
-  id: z.string().uuid().optional(),
+const refPickSchema: z.ZodType<CreatablePick, CreatablePick> = z.object({
+  id: z.uuid().optional(),
   name: z.string(),
 });
 
 const itemSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+  name: z.string().min(1, { error: 'Name is required' }),
   description: z.string().optional(),
   category: refPickSchema,
   item_type: z.enum(['asset', 'consumable', 'container', 'grouped']),
@@ -45,7 +45,9 @@ const itemSchema = z.object({
   notes: z.string().optional(),
 });
 
-export type ItemFormValues = z.infer<typeof itemSchema>;
+export type ItemFormValues = z.output<typeof itemSchema>;
+/** What the inputs hold before validation; the coerced numbers can still be strings. */
+type ItemFormInput = z.input<typeof itemSchema>;
 
 type Props = {
   defaultValues?: Partial<ItemFormValues>;
@@ -71,7 +73,7 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
     return items.map((l) => ({ id: l.id, name: paths.get(l.id) ?? l.name }));
   }, [locs.data?.items]);
 
-  const form = useForm<ItemFormValues>({
+  const form = useForm<ItemFormInput, unknown, ItemFormValues>({
     resolver: zodResolver(itemSchema),
     defaultValues: {
       item_type: 'asset',
@@ -85,7 +87,7 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
       needed_by_department: { name: '' },
       location: { name: '' },
       ...defaultValues,
-    } as ItemFormValues,
+    } as ItemFormInput,
   });
 
   const itemType = useWatch({ control: form.control, name: 'item_type' });
@@ -144,14 +146,14 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
     }
   };
 
-  const submit = form.handleSubmit(async (_values) => {
+  const submit = form.handleSubmit(async (values) => {
     syncCreatablesFromDom();
     const committed = form.getValues();
     const deptOpts = depts.data?.items ?? [];
     const catOpts = cats.data?.items ?? [];
 
     const sanitized: ItemFormValues = {
-      ...committed,
+      ...values,
       category: creatablePickFromDom('category', committed.category, catOpts),
       managed_by_department: creatablePickFromDom(
         'managed_by_department',

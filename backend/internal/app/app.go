@@ -18,9 +18,10 @@ import (
 	"github.com/AGlElectronics/stash/backend/internal/auth"
 	"github.com/AGlElectronics/stash/backend/internal/config"
 	"github.com/AGlElectronics/stash/backend/internal/db"
-	"github.com/AGlElectronics/stash/backend/internal/files"
 	"github.com/AGlElectronics/stash/backend/internal/denlink"
+	"github.com/AGlElectronics/stash/backend/internal/files"
 	httpx "github.com/AGlElectronics/stash/backend/internal/http"
+	"github.com/AGlElectronics/stash/backend/internal/tlscert"
 )
 
 // Version is set via -ldflags at build time.
@@ -116,6 +117,9 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
+	if _, err := tlscert.Configure(ctx, server, logger); err != nil {
+		return fmt.Errorf("tls: %w", err)
+	}
 
 	return runServer(ctx, server, pool, cfg.ShutdownTimeout, logger)
 }
@@ -127,7 +131,7 @@ func runServer(ctx context.Context, server *nethttp.Server, pool *pgxpool.Pool, 
 	errCh := make(chan error, 1)
 	go func() {
 		logger.Info().Str("addr", server.Addr).Msg("http listening")
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, nethttp.ErrServerClosed) {
+		if err := tlscert.ListenAndServe(server); err != nil && !errors.Is(err, nethttp.ErrServerClosed) {
 			errCh <- err
 		}
 		close(errCh)

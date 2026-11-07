@@ -32,10 +32,6 @@ services:
     configs:
       - source: stash-access
         target: /etc/stash/access.toml
-  frontend:
-    build:
-      args:
-        VITE_PUBLIC_CLAIM_ENABLED: "true"
   postgres:
     ports: !override
       - "5433:5432"

@@ -47,38 +47,36 @@ Example:
 ```bash
 docker build -f infra/Dockerfile.frontend \
   --build-arg NGINX_CONF=nginx.k8s.conf \
-  --build-arg VITE_AUTH_MODE=oidc \
-  --build-arg VITE_OIDC_AUTHORITY=https://sso.example.com/realms/conservices \
-  --build-arg VITE_OIDC_CLIENT_ID=stash-spa \
-  --build-arg "VITE_OIDC_SCOPE=openid profile email" \
   -t registry.example.com/stash/frontend:1.2.3 .
 ```
 
-**What to gather for OIDC (bake into the SPA vs backend runtime)**
+**OIDC settings: web app `/config.json` vs backend runtime**
 
-| What | Baked into **frontend image** (`--build-arg` / Vite) | Backend **runtime** env (must match IdP) |
-|------|------------------------------------------------------|----------------------------------------|
-| Issuer / authority URL (Keycloak realm root) | `VITE_OIDC_AUTHORITY` — e.g. `https://sso.example.com/realms/conservices` (no trailing slash) | `OIDC_ISSUER_URL` — same issuer URL the API trusts for JWTs |
-| SPA client id (public client in IdP) | `VITE_OIDC_CLIENT_ID` — e.g. `stash-spa` | `OIDC_CLIENT_ID` — often the same SPA client id |
-| Scopes for browser login | `VITE_OIDC_SCOPE` — typically `openid profile email` | (not usually needed for API if using bearer tokens from same client) |
-| Auth mode | `VITE_AUTH_MODE=oidc` | `AUTH_MODE=oidc` |
+The frontend image names no domain. Its sign-in settings live in
+`/config.json`, which nginx serves from `/etc/conservices/config.json`:
+mount a ConfigMap there (the Helm chart's `frontend.config` and the
+Kustomize manifests do this). Reference:
+<https://aglelectronics.github.io/con-services/modules/stash/configuration/#web-app-settings-configjson>.
+
+| What | Web app **`/config.json`** key | Backend **runtime** env (must match IdP) |
+|------|--------------------------------|----------------------------------------|
+| Issuer / authority URL (Keycloak realm root) | `oidcAuthority` — e.g. `https://sso.example.com/realms/conservices` (no trailing slash) | `OIDC_ISSUER_URL` — same issuer URL the API trusts for JWTs |
+| SPA client id (public client in IdP) | `oidcClientId` — e.g. `stash-spa` | `OIDC_CLIENT_ID` — often the same SPA client id |
+| Scopes for browser login | `oidcScope` — typically `openid profile email` | (not usually needed for API if using bearer tokens from same client) |
+| Auth mode | `authMode: "oidc"` | `AUTH_MODE=oidc` |
+| Guest claim page | `publicClaimEnabled` | `PUBLIC_LOSTFOUND_CLAIM_ENABLED` |
 | API audience / resource | (only if your SPA code adds it; current app uses authority + client_id) | `OIDC_AUDIENCE` if your tokens include a resource audience claim the API checks |
 
 Also set **`NGINX_CONF=nginx.k8s.conf`** for cluster (proxies `/api` to the `stash-backend` Service).
 
-**Verify the bundle after push** (strings must appear in static JS or login stays broken):
+**Verify what the browser gets** (wrong values here mean login stays broken):
 
 ```bash
-kubectl -n stash exec deploy/stash-frontend -- sh -c 'grep -roh "sso.example.com" /usr/share/nginx/html/static | head -1'
-kubectl -n stash exec deploy/stash-frontend -- sh -c 'grep -roh "stash-spa" /usr/share/nginx/html/static | head -1'
+curl -s https://stash.example.com/config.json
 ```
 
-Replace host/client id with your real values if they differ.
-
-**Frontend build args (OIDC):** Set at image build time (see `infra/Dockerfile.frontend`; `oidc` builds fail if authority or client id are empty):
-
-- `VITE_AUTH_MODE=oidc`
-- `VITE_OIDC_AUTHORITY`, `VITE_OIDC_CLIENT_ID`, `VITE_OIDC_SCOPE`
+The web app shows "Not configured yet" while `oidcAuthority` or
+`oidcClientId` is empty.
 
 **Backend runtime env:**
 
@@ -102,7 +100,7 @@ Typical pattern:
 2. Nginx proxies `/api/*` to `stash-backend` Service (`:8080`).  
 3. Browser calls **same origin** → no CORS for API (still set `CORS_ALLOWED_ORIGINS` to that origin for preflight safety).
 
-Alternatively: separate ingress hosts for API and SPA (update CORS and `VITE_API_BASE_URL` accordingly).
+Alternatively: separate ingress hosts for API and SPA (update CORS and `apiBaseUrl` in the web app's `/config.json` accordingly).
 
 ## Argo CD Application
 

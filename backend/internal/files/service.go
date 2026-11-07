@@ -32,7 +32,7 @@ const MaxAttachmentBytes = 50 * 1024 * 1024
 const presignExpiry = 15 * time.Minute
 
 // storageRootPrefix is the single top-level folder in the bucket for new
-// uploads. The MinIO/S3 console then shows one tidy root (stash/…) instead
+// uploads. An S3 browser then shows one tidy root (stash/…) instead
 // of many sibling prefixes (item/, signout/, …). Metadata rows that still
 // point at legacy keys without this prefix continue to work.
 const storageRootPrefix = "stash"
@@ -210,7 +210,7 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (sqlcgen.File, err
 		SetAsPrimary:     in.SetAsPrimary,
 	})
 	if err != nil {
-		// best-effort cleanup so we don't leave orphaned objects in MinIO
+		// best-effort cleanup so we don't leave orphaned objects in the bucket
 		_ = s.client.Remove(ctx, storageKey)
 		return sqlcgen.File{}, err
 	}
@@ -314,7 +314,7 @@ func (s *Service) Download(ctx context.Context, fileID uuid.UUID) (DownloadResul
 // RawStream returns the metadata row plus a reader for the underlying object.
 // The caller is responsible for closing the reader and writing the bytes to
 // the response. We expose this (rather than only presigned URLs) so the
-// browser never has to talk to MinIO directly — much friendlier in dev where
+// browser never has to talk to object storage directly — much friendlier in dev where
 // the storage host is on a different origin and CORS / signed-host headers
 // would otherwise bite.
 func (s *Service) RawStream(ctx context.Context, fileID uuid.UUID) (sqlcgen.File, io.ReadCloser, error) {

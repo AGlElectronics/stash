@@ -64,7 +64,7 @@ export type UploadOptions = {
 
 /**
  * Upload a single file via the backend (multipart). The backend streams to
- * MinIO and registers the metadata in one call so the browser never has to
+ * S3 and registers the metadata in one call so the browser never has to
  * hit the storage host directly (no CORS dance in dev).
  */
 export function uploadFile(file: File, opts: UploadOptions): Promise<StoredFile> {

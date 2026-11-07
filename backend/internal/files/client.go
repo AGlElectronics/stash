@@ -1,4 +1,4 @@
-// Package files wraps an S3-compatible object storage client (MinIO in dev)
+// Package files wraps an S3-compatible object storage client (SeaweedFS in dev)
 // and provides presigned URL helpers and a service that registers file
 // metadata in PostgreSQL.
 package files
@@ -19,7 +19,7 @@ import (
 
 // Client wraps a *minio.Client plus the configured bucket and a public-facing
 // base URL used when rewriting host addresses for presigned URLs that the
-// browser needs to reach (e.g. minio:9000 -> localhost:9000).
+// browser needs to reach (e.g. s3:9000 -> localhost:9000).
 type Client struct {
 	mc            *minio.Client
 	bucket        string
@@ -40,7 +40,7 @@ func New(ctx context.Context, cfg *config.Config) (*Client, error) {
 
 	// Without explicit BucketLookup the SDK auto-detects, which can flip
 	// between path- and virtual-hosted style depending on the host name.
-	// Pin to path-style when configured (default for MinIO in compose) so
+	// Pin to path-style when configured (default for the compose S3 server) so
 	// the signed canonical resource matches what the browser actually sends.
 	bucketLookup := minio.BucketLookupAuto
 	if cfg.S3UsePathStyle {
@@ -77,8 +77,9 @@ func New(ctx context.Context, cfg *config.Config) (*Client, error) {
 }
 
 func publicBaseURL(cfg *config.Config) (*url.URL, error) {
-	// Allow an explicit override via env. Otherwise, swap "minio" for
-	// "localhost" so presigned URLs returned to a dev browser actually work.
+	// Allow an explicit override via env. Otherwise, swap the compose host
+	// "s3" (formerly "minio") for "localhost" so presigned URLs returned to a
+	// dev browser actually work.
 	if v := getenv("S3_PUBLIC_BASE_URL"); v != "" {
 		return url.Parse(v)
 	}
@@ -86,8 +87,8 @@ func publicBaseURL(cfg *config.Config) (*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
-	if strings.Contains(u.Host, "minio") {
-		u.Host = strings.ReplaceAll(u.Host, "minio", "localhost")
+	if h := u.Hostname(); h == "s3" || h == "minio" {
+		u.Host = strings.Replace(u.Host, h, "localhost", 1)
 	}
 	return u, nil
 }

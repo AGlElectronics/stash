@@ -129,7 +129,6 @@ func (s SystemSettings) DefaultCurrencyOrEUR() string {
 	return c
 }
 
-
 // PatchJSON merges a partial JSON object into the stored settings document.
 // Unknown keys are preserved; only provided keys are overwritten.
 func (s *SettingsService) PatchJSON(ctx context.Context, patch json.RawMessage) (SystemSettings, error) {

@@ -1,8 +1,11 @@
 import { defineConfig } from '@rsbuild/core';
 import { pluginReact } from '@rsbuild/plugin-react';
 
-// Rsbuild does not auto-inject process.env into import.meta.env like Vite; Docker / CI must
-// set VITE_* on the environment, and we map them here so production OIDC builds work.
+// Build-time fallbacks for the web app settings. Images read the
+// installation's settings from /config.json at start-up (src/runtime-config.ts);
+// these VITE_* values only fill keys that file leaves out, which is how
+// `npm run dev` with a .env file works. Rsbuild does not forward process.env
+// into import.meta.env by itself, so they are mapped with `define` below.
 const viteEnv = {
   VITE_AUTH_MODE: process.env.VITE_AUTH_MODE ?? 'dev',
   VITE_OIDC_AUTHORITY: process.env.VITE_OIDC_AUTHORITY ?? '',

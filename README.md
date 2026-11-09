@@ -1,5 +1,11 @@
 # Stash
 
+> [!WARNING]
+> ## **NOT READY FOR PRODUCTION**
+>
+> Con Services is under active development. Expect breaking changes, missing
+> features and bugs. Do not use it for real events or real data yet.
+
 Reusable inventory module for Con Services (AGl Electronics). Tracks items, locations, departments, and sign-outs end-to-end with a full audit trail and per-item lifecycle history.
 
 ## What's in the box

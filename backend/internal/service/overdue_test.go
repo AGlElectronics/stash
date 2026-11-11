@@ -115,7 +115,8 @@ func TestOverdueMailUsesDenPassword(t *testing.T) {
 			"password_set": true, "security": "starttls",
 			"from": "stash@con.example.org", "from_name": "Stash"}}
 	}`})
-	if _, err := settings.PatchJSON(f.ctx, []byte(`{"overdue_email_enabled":true,"smtp_host":"local.example.org","smtp_from":"local@example.org","overdue_notify_emails":"logistics@example.org"}`)); err != nil {
+	// smtp_* is managed by Den while paired, so only the Stash-owned switches are patched.
+	if _, err := settings.PatchJSON(f.ctx, []byte(`{"overdue_email_enabled":true,"overdue_notify_emails":"logistics@example.org"}`)); err != nil {
 		t.Fatal(err)
 	}
 	sender := &recordingSender{}

@@ -1,11 +1,14 @@
 package files
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	nethttp "net/http"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -38,11 +41,48 @@ const presignExpiry = 15 * time.Minute
 const storageRootPrefix = "stash"
 
 func newBlobObjectKey(entityType string, entityID uuid.UUID, ext string) string {
+	return entityKeyPrefix(entityType, entityID) + uuid.NewString() + ext
+}
+
+// entityKeyPrefix is the folder every object of one entity lives in.
+func entityKeyPrefix(entityType string, entityID uuid.UUID) string {
 	t := strings.TrimSpace(strings.ToLower(entityType))
 	if t == "" {
 		t = "misc"
 	}
-	return fmt.Sprintf("%s/%s/%s/%s%s", storageRootPrefix, t, entityID, uuid.NewString(), ext)
+	return fmt.Sprintf("%s/%s/%s/", storageRootPrefix, t, entityID)
+}
+
+// KeyBelongsTo reports whether a storage key lies in the entity's own
+// folder, so a client cannot attach (and later delete) another entity's
+// object by naming its key.
+func KeyBelongsTo(key, entityType string, entityID uuid.UUID) bool {
+	prefix := entityKeyPrefix(entityType, entityID)
+	rest, ok := strings.CutPrefix(key, prefix)
+	return ok && rest != "" && !strings.Contains(rest, "/") && !strings.Contains(rest, "..")
+}
+
+// EntityTypes are the entities files can be attached to.
+var EntityTypes = []string{"item", "lostfound"}
+
+// safeInlineImageTypes are the image types a browser may show inline. SVG
+// is not one: it can carry scripts.
+var safeInlineImageTypes = map[string]bool{
+	"image/png":  true,
+	"image/jpeg": true,
+	"image/gif":  true,
+	"image/webp": true,
+	"image/avif": true,
+	"image/bmp":  true,
+}
+
+// InlineSafe reports whether a stored content type may be served inline.
+func InlineSafe(contentType string) bool {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	if i := strings.IndexByte(ct, ';'); i >= 0 {
+		ct = strings.TrimSpace(ct[:i])
+	}
+	return safeInlineImageTypes[ct]
 }
 
 // Service registers file metadata for an entity (item, signout, ...) and
@@ -77,6 +117,9 @@ func (s *Service) PresignUpload(ctx context.Context, in PresignUploadInput) (Pre
 	if in.OriginalFilename == "" {
 		return PresignUploadResult{}, httperror.Validation("original_filename is required", nil)
 	}
+	if !slices.Contains(EntityTypes, in.EntityType) {
+		return PresignUploadResult{}, httperror.Validation("unsupported entity_type: "+in.EntityType, nil)
+	}
 
 	ext := strings.ToLower(path.Ext(in.OriginalFilename))
 	storageKey := newBlobObjectKey(in.EntityType, in.EntityID, ext)
@@ -109,6 +152,9 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (sqlcgen.File,
 	if in.StorageKey == "" {
 		return sqlcgen.File{}, httperror.Validation("storage_key is required", nil)
 	}
+	if !KeyBelongsTo(in.StorageKey, in.EntityType, in.EntityID) {
+		return sqlcgen.File{}, httperror.Validation("storage_key does not belong to this "+in.EntityType+"; use the key from presign-upload", nil)
+	}
 	if in.SizeBytes < 0 {
 		return sqlcgen.File{}, httperror.Validation("size_bytes must be >= 0", nil)
 	}
@@ -119,6 +165,9 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (sqlcgen.File,
 	var out sqlcgen.File
 	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		qtx := sqlcgen.New(tx)
+		if err := entityExists(ctx, tx, in.EntityType, in.EntityID); err != nil {
+			return err
+		}
 		row, err := qtx.InsertFile(ctx, sqlcgen.InsertFileParams{
 			EntityType:       in.EntityType,
 			EntityID:         in.EntityID,
@@ -147,6 +196,27 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (sqlcgen.File,
 		return audit.Record(ctx, qtx, "file.register", "file", row.ID, nil, row, "")
 	})
 	return out, err
+}
+
+// entityExists checks that the item or report a file is attached to exists.
+func entityExists(ctx context.Context, tx pgx.Tx, entityType string, id uuid.UUID) error {
+	var table string
+	switch entityType {
+	case "item":
+		table = "items"
+	case "lostfound":
+		table = "lost_found_reports"
+	default:
+		return httperror.Validation("unsupported entity_type: "+entityType, nil)
+	}
+	var ok bool
+	if err := tx.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM "+table+" WHERE id = $1)", id).Scan(&ok); err != nil {
+		return httperror.Internal(err)
+	}
+	if !ok {
+		return httperror.NotFound(entityType)
+	}
+	return nil
 }
 
 // UploadInput is what the multipart handler hands to Service.Upload.
@@ -190,11 +260,27 @@ func (s *Service) Upload(ctx context.Context, in UploadInput) (sqlcgen.File, err
 		return sqlcgen.File{}, httperror.Validation("file_type=image requires an image/* content_type", nil)
 	}
 
-	ext := strings.ToLower(path.Ext(in.OriginalFilename))
-	storageKey := newBlobObjectKey(in.EntityType, in.EntityID, ext)
-
 	// Wrap with a hard limit so a lying Content-Length can't blow past the cap.
 	body := io.LimitReader(in.Body, limit+1)
+	if in.FileType == domain.FileTypeImage {
+		// Store what the bytes are, not what the client claims, so only real
+		// raster images are ever served inline.
+		head := make([]byte, 512)
+		n, err := io.ReadFull(body, head)
+		if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+			return sqlcgen.File{}, httperror.BadRequest("could not read the file")
+		}
+		head = head[:n]
+		detected := nethttp.DetectContentType(head)
+		if !InlineSafe(detected) {
+			return sqlcgen.File{}, httperror.Validation("images must be PNG, JPEG, GIF, WebP, AVIF or BMP", nil)
+		}
+		in.ContentType = detected
+		body = io.MultiReader(bytes.NewReader(head), body)
+	}
+
+	ext := strings.ToLower(path.Ext(in.OriginalFilename))
+	storageKey := newBlobObjectKey(in.EntityType, in.EntityID, ext)
 	if err := s.client.PutObject(ctx, storageKey, body, in.Size, in.ContentType); err != nil {
 		return sqlcgen.File{}, httperror.Internal(err)
 	}
@@ -346,8 +432,11 @@ func (s *Service) Delete(ctx context.Context, fileID uuid.UUID) error {
 		if err := qtx.DeleteFile(ctx, fileID); err != nil {
 			return httperror.Internal(err)
 		}
-		// best-effort remove from object storage
-		_ = s.client.Remove(ctx, row.StorageKey)
+		// Best effort, and only objects in the entity's own folder: a row
+		// can never make us delete someone else's object.
+		if KeyBelongsTo(row.StorageKey, row.EntityType, row.EntityID) {
+			_ = s.client.Remove(ctx, row.StorageKey)
+		}
 		return audit.Record(ctx, qtx, "file.delete", "file", fileID, row, nil, "")
 	})
 }

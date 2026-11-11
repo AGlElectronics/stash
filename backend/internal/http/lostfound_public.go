@@ -3,10 +3,8 @@ package http
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -142,20 +140,7 @@ func (h *publicLostFoundHandler) photo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = rc.Close() }()
-
-	if stream.ContentType != "" {
-		w.Header().Set("Content-Type", stream.ContentType)
-	}
-	if stream.SizeBytes > 0 {
-		w.Header().Set("Content-Length", strconv.FormatInt(stream.SizeBytes, 10))
-	}
-	w.Header().Set("Cache-Control", "public, max-age=3600")
-	if stream.OriginalFilename != "" {
-		w.Header().Set("Content-Disposition", `inline; filename="`+sanitizeFilename(stream.OriginalFilename)+`"`)
-	}
-	if _, err := io.Copy(w, rc); err != nil {
-		_ = err
-	}
+	serveFile(w, stream, rc, "public, max-age=3600")
 }
 
 func resolvePublicLostFoundPhotoID(ctx context.Context, q *sqlcgen.Queries, reportID uuid.UUID, photoFileID *uuid.UUID) (*uuid.UUID, error) {

@@ -88,6 +88,17 @@ the same version. Rebuilds get no entry here.
   or edit items pick from the existing entries.
 - A `department_id` on a binding in `access-config.toml` stops the backend
   at startup with "roles are global, remove the line".
+- Files: `POST /api/files` only accepts a `storage_key` inside the item's
+  or report's own folder (the key `presign-upload` returned), and deleting
+  a file only removes objects from that folder. Files can only be attached
+  to an item or Lost & Found report that exists.
+- Files: downloads are sent with `X-Content-Type-Options: nosniff` and a
+  sandbox `Content-Security-Policy`. Only PNG, JPEG, GIF, WebP, AVIF and
+  BMP images are shown inline; everything else (PDF, SVG, HTML, …) is a
+  download. Image uploads are checked by their content, not their name.
+- Uploads larger than 51 MiB are refused with `413 payload_too_large`
+  before they are read.
+- A Lost & Found report's photo must be a photo uploaded to that report.
 - The backend reads the client address from `X-Forwarded-For` only when
   the connection comes from a trusted proxy (`TRUSTED_PROXY_CIDRS`), and
   ignores `X-Real-IP` and `True-Client-IP`.

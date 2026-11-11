@@ -154,8 +154,8 @@ func (s *LostFoundService) Create(ctx context.Context, in CreateLostFoundInput) 
 	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		qtx := sqlcgen.New(tx)
 
-		if err := validateLostFoundPhoto(ctx, qtx, in.PhotoFileID); err != nil {
-			return err
+		if in.PhotoFileID != nil {
+			return httperror.Validation("create the report first, then upload the photo to it", nil)
 		}
 
 		number, err := qtx.NextLostFoundNumber(ctx)
@@ -236,7 +236,7 @@ func (s *LostFoundService) Update(ctx context.Context, id uuid.UUID, in UpdateLo
 			next.PhotoFileID = nil
 			fieldsEdited = fieldsEdited || before.PhotoFileID != nil
 		} else if in.PhotoFileID != nil {
-			if err := validateLostFoundPhoto(ctx, qtx, in.PhotoFileID); err != nil {
+			if err := validateLostFoundPhoto(ctx, qtx, id, in.PhotoFileID); err != nil {
 				return err
 			}
 			next.PhotoFileID = in.PhotoFileID
@@ -359,10 +359,11 @@ func (s *LostFoundService) Delete(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-// validateLostFoundPhoto checks that a referenced photo file exists and is an
-// image. Reports are created before the photo is uploaded (the file upload
-// needs the report id as entity_id), so the reference arrives via PATCH.
-func validateLostFoundPhoto(ctx context.Context, q *sqlcgen.Queries, fileID *uuid.UUID) error {
+// validateLostFoundPhoto checks that a referenced photo file exists, is an
+// image and is attached to this report. Reports are created before the
+// photo is uploaded (the file upload needs the report id as entity_id), so
+// the reference arrives via PATCH.
+func validateLostFoundPhoto(ctx context.Context, q *sqlcgen.Queries, reportID uuid.UUID, fileID *uuid.UUID) error {
 	if fileID == nil {
 		return nil
 	}
@@ -375,6 +376,9 @@ func validateLostFoundPhoto(ctx context.Context, q *sqlcgen.Queries, fileID *uui
 	}
 	if row.FileType != string(domain.FileTypeImage) {
 		return httperror.Validation("photo_file_id must reference an image file", nil)
+	}
+	if row.EntityType != "lostfound" || row.EntityID != reportID {
+		return httperror.Validation("photo_file_id must be a photo uploaded to this report", nil)
 	}
 	return nil
 }

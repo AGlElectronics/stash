@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -119,31 +121,49 @@ func (h *fileHandler) raw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = rc.Close() }()
+	serveFile(w, row, rc, "private, max-age=300")
+}
 
-	if row.ContentType != "" {
-		w.Header().Set("Content-Type", row.ContentType)
+// serveFile writes a stored object. PNG, JPEG, GIF, WebP, AVIF and BMP
+// images are sent inline so <img src> works; everything else (PDFs, SVG,
+// HTML, ...) is a download. nosniff and a sandbox CSP stop a browser from
+// running anything it receives here.
+func serveFile(w http.ResponseWriter, row sqlcgen.File, rc io.Reader, cacheControl string) {
+	h := w.Header()
+	disposition := "attachment"
+	contentType := "application/octet-stream"
+	if files.InlineSafe(row.ContentType) {
+		disposition, contentType = "inline", row.ContentType
 	}
+	h.Set("Content-Type", contentType)
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	h.Set("Cache-Control", cacheControl)
 	if row.SizeBytes > 0 {
-		w.Header().Set("Content-Length", strconv.FormatInt(row.SizeBytes, 10))
+		h.Set("Content-Length", strconv.FormatInt(row.SizeBytes, 10))
 	}
-	w.Header().Set("Cache-Control", "private, max-age=300")
-	if row.OriginalFilename != "" {
-		// inline so <img src> works; the filename is a hint only.
-		w.Header().Set("Content-Disposition", `inline; filename="`+sanitizeFilename(row.OriginalFilename)+`"`)
+	name := sanitizeFilename(row.OriginalFilename)
+	if name == "" {
+		name = "file"
 	}
-	if _, err := io.Copy(w, rc); err != nil {
-		// connection closed mid-stream is normal; only log surprises
-		_ = err
-	}
+	h.Set("Content-Disposition", disposition+`; filename="`+name+`"`)
+	// A client closing the connection mid-stream is normal.
+	_, _ = io.Copy(w, rc)
 }
 
-// sanitizeFilename strips quotes so we can safely inline it in a header.
+// sanitizeFilename keeps a filename safe to put in a quoted header value.
 func sanitizeFilename(s string) string {
-	s = strings.ReplaceAll(s, `"`, "")
-	s = strings.ReplaceAll(s, "\r", "")
-	s = strings.ReplaceAll(s, "\n", "")
-	return s
+	return strings.Map(func(r rune) rune {
+		if r == '"' || r == '\\' || r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
 }
+
+// maxUploadBody caps a multipart upload: the largest file plus room for
+// the form fields.
+const maxUploadBody = files.MaxAttachmentBytes + 1<<20
 
 // upload accepts a multipart/form-data POST and streams the file to object
 // storage via the backend, then registers the metadata. Form fields:
@@ -155,11 +175,20 @@ func sanitizeFilename(s string) string {
 //     the entity's primary image (only honored for entity_type=item +
 //     file_type=image).
 func (h *fileHandler) upload(w http.ResponseWriter, r *http.Request) {
-	// 32 MiB in memory; anything larger spills to disk via mime/multipart.
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadBody)
+	// 8 MiB in memory; anything larger spills to disk via mime/multipart.
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]any{"error": map[string]string{
+				"code": "payload_too_large", "message": fmt.Sprintf("upload is larger than %d bytes", maxUploadBody),
+			}})
+			return
+		}
 		httperror.Render(w, r, httperror.BadRequest("invalid multipart form: "+err.Error()))
 		return
 	}
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
 
 	file, header, err := r.FormFile("file")
 	if err != nil {

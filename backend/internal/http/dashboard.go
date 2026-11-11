@@ -39,7 +39,7 @@ func dashboardHandler(pool *pgxpool.Pool) http.HandlerFunc {
 		q := sqlcgen.New(pool)
 		var resp dashboardResponse
 
-		if u.HasAny(domain.PermSignoutView) {
+		if u.Has(domain.PermSignoutView) {
 			overdue, err := q.CountOverdueSignouts(ctx)
 			if err != nil {
 				httperror.Render(w, r, httperror.Internal(err))
@@ -69,7 +69,7 @@ func dashboardHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			}
 		}
 
-		if u.HasAny(domain.PermItemView) {
+		if u.Has(domain.PermItemView) {
 			lowStock, err := q.CountLowStockItems(ctx)
 			if err != nil {
 				httperror.Render(w, r, httperror.Internal(err))
@@ -84,7 +84,7 @@ func dashboardHandler(pool *pgxpool.Pool) http.HandlerFunc {
 			resp.DamagedItems = &damaged
 		}
 
-		if u.HasAny(domain.PermLostfoundView) {
+		if u.Has(domain.PermLostfoundView) {
 			open, err := q.CountOpenLostFoundReports(ctx)
 			if err != nil {
 				httperror.Render(w, r, httperror.Internal(err))

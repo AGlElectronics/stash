@@ -8,6 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/AGlElectronics/stash/backend/internal/auth"
+	"github.com/AGlElectronics/stash/backend/internal/domain"
 	"github.com/AGlElectronics/stash/backend/internal/repository/sqlcgen"
 )
 
@@ -64,11 +66,48 @@ func (m *mockLocationResolver) CreateLocation(ctx context.Context, arg sqlcgen.C
 	return m.createLoc(ctx, arg)
 }
 
+func ctxWithPerms(perms ...string) context.Context {
+	set := map[string]struct{}{}
+	for _, p := range perms {
+		set[p] = struct{}{}
+	}
+	return auth.WithUser(context.Background(), &auth.User{ID: uuid.New(), Permissions: set})
+}
+
+func managerCtx() context.Context {
+	return ctxWithPerms(domain.PermDepartmentManage, domain.PermCategoryManage, domain.PermLocationManage)
+}
+
 // --- tests ---
+
+func TestResolveRefsDoNotCreateForItemRoles(t *testing.T) {
+	t.Parallel()
+	ctx := ctxWithPerms(domain.PermItemCreate, domain.PermItemEdit)
+	notFound := func() error { return pgx.ErrNoRows }
+
+	dept := &mockDeptResolver{getByName: func(context.Context, string) (sqlcgen.Department, error) {
+		return sqlcgen.Department{}, notFound()
+	}}
+	if _, err := resolveDepartmentRefTx(ctx, dept, nil, "Brand new"); err == nil || dept.createCalls != 0 {
+		t.Fatalf("department: err=%v creates=%d, want validation error and no create", err, dept.createCalls)
+	}
+	cat := &mockCategoryResolver{getByName: func(context.Context, string) (sqlcgen.ItemCategory, error) {
+		return sqlcgen.ItemCategory{}, notFound()
+	}}
+	if _, err := resolveCategoryRefTx(ctx, cat, nil, "Brand new"); err == nil || cat.createCalls != 0 {
+		t.Fatalf("category: err=%v creates=%d", err, cat.createCalls)
+	}
+	loc := &mockLocationResolver{getByName: func(context.Context, string) (sqlcgen.Location, error) {
+		return sqlcgen.Location{}, notFound()
+	}}
+	if _, err := resolveLocationRefTx(ctx, loc, nil, "Brand new"); err == nil || loc.createCalls != 0 {
+		t.Fatalf("location: err=%v creates=%d", err, loc.createCalls)
+	}
+}
 
 func TestResolveDepartmentRefTx(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := managerCtx()
 
 	t.Run("returns id when already set", func(t *testing.T) {
 		t.Parallel()
@@ -203,7 +242,7 @@ func TestResolveDepartmentRefTx(t *testing.T) {
 
 func TestResolveCategoryRefTx(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := managerCtx()
 
 	t.Run("returns id when set", func(t *testing.T) {
 		t.Parallel()
@@ -270,7 +309,7 @@ func TestResolveCategoryRefTx(t *testing.T) {
 
 func TestResolveLocationRefTx(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
+	ctx := managerCtx()
 
 	t.Run("returns id when set", func(t *testing.T) {
 		t.Parallel()

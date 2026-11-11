@@ -114,11 +114,11 @@ func NewRouter(deps Deps, version string) http.Handler {
 			secure.Get("/me/preferences", prefs)
 			secure.Put("/me/preferences", prefs)
 
-			// Reads always require at least the matching view permission anywhere.
-			// Writes are gated per-method via small inline groups so the same
-			// route can apply different permissions to different verbs.
+			// Reference data: anyone who can see items can read it; only the
+			// matching manage permission may create, rename or delete. Item
+			// roles pick from existing entries and never create them.
 			secure.Group(func(g chi.Router) {
-				g.Use(requireAny(domain.PermItemView))
+				g.Use(requireAnyOf(domain.PermItemView, domain.PermSignoutView))
 				g.Get("/departments", depts.list)
 				g.Get("/departments/{id}", depts.get)
 				g.Get("/categories", cats.list)
@@ -126,43 +126,21 @@ func NewRouter(deps Deps, version string) http.Handler {
 				g.Get("/locations", locs.list)
 				g.Get("/locations/{id}", locs.get)
 			})
-
 			secure.Group(func(g chi.Router) {
-				g.Use(requireAnyGlobal(
-					domain.PermDepartmentManage,
-					domain.PermItemCreate,
-					domain.PermItemEdit,
-				))
+				g.Use(require(domain.PermDepartmentManage))
 				g.Post("/departments", depts.create)
-			})
-			secure.Group(func(g chi.Router) {
-				g.Use(requireGlobal(domain.PermDepartmentManage))
 				g.Patch("/departments/{id}", depts.update)
 				g.Delete("/departments/{id}", depts.delete)
 			})
 			secure.Group(func(g chi.Router) {
-				g.Use(requireAnyGlobal(
-					domain.PermCategoryManage,
-					domain.PermItemCreate,
-					domain.PermItemEdit,
-				))
+				g.Use(require(domain.PermCategoryManage))
 				g.Post("/categories", cats.create)
-			})
-			secure.Group(func(g chi.Router) {
-				g.Use(requireGlobal(domain.PermCategoryManage))
 				g.Patch("/categories/{id}", cats.update)
 				g.Delete("/categories/{id}", cats.delete)
 			})
 			secure.Group(func(g chi.Router) {
-				g.Use(requireAnyGlobal(
-					domain.PermLocationManage,
-					domain.PermItemCreate,
-					domain.PermItemEdit,
-				))
+				g.Use(require(domain.PermLocationManage))
 				g.Post("/locations", locs.create)
-			})
-			secure.Group(func(g chi.Router) {
-				g.Use(requireGlobal(domain.PermLocationManage))
 				g.Patch("/locations/{id}", locs.update)
 				g.Delete("/locations/{id}", locs.delete)
 			})
@@ -176,7 +154,7 @@ func NewRouter(deps Deps, version string) http.Handler {
 			// would apply one middleware block to all verbs on that sub-router).
 			secure.Get("/settings", settings.get)
 			secure.Group(func(g chi.Router) {
-				g.Use(requireGlobal(domain.PermAccessManage))
+				g.Use(require(domain.PermAccessManage))
 				g.Patch("/settings", settings.patch)
 				g.Route("/den", func(dr chi.Router) {
 					dr.Get("/", den.StatusHandler)
@@ -201,35 +179,20 @@ func meHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	memberships := make([]map[string]any, 0, len(u.Memberships))
-	for _, m := range u.Memberships {
-		var dept *string
-		if m.DepartmentID != nil {
-			s := m.DepartmentID.String()
-			dept = &s
-		}
-		memberships = append(memberships, map[string]any{
-			"department_id": dept,
-			"role":          m.Role,
-		})
+	roles := make([]string, 0, len(u.Roles))
+	for _, role := range u.Roles {
+		roles = append(roles, auth.RoleKey(role))
 	}
-	// Effective permissions (global + dept-scoped union) so the SPA can
-	// gate navigation; precise dept-aware enforcement stays server-side.
 	perms := u.EffectivePermissions()
 	if perms == nil {
 		perms = []string{}
 	}
-	primary := ""
-	if pd := u.PrimaryDepartment(); pd != nil {
-		primary = pd.String()
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":                    u.ID.String(),
-		"display_name":          u.DisplayName,
-		"email":                 u.Email,
-		"oidc_subject":          u.OIDCSubject,
-		"memberships":           memberships,
-		"permissions":           perms,
-		"primary_department_id": primary,
+		"id":           u.ID.String(),
+		"display_name": u.DisplayName,
+		"email":        u.Email,
+		"oidc_subject": u.OIDCSubject,
+		"roles":        roles,
+		"permissions":  perms,
 	})
 }

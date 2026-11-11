@@ -12,7 +12,14 @@
 #               lostfound.reopen  lostfound.delete
 #
 # Roles below replace built-in defaults when listed. Omit a role to keep the
-# code default. Bindings map Keycloak client roles (groups claim) → Stash role.
+# code default. Every role is global: it applies to every department's gear.
+#
+# A person gets a role in two ways:
+#   1. a binding below maps one of their groups to the role, or
+#   2. they are in a group named exactly like the role's catalog key,
+#      stash_<role> (for example stash_volunteer), with no binding needed.
+# GET /api/role-catalog publishes each role once as stash_<role>, with the
+# first group bound to it here (or the key itself) as the group HR assigns.
 
 # ── Roles ────────────────────────────────────────────────────────────────────
 
@@ -76,9 +83,9 @@ permissions = [
   "file.upload",
 ]
 
-# Department lead — sign-outs and returns for their dept.
+# Department lead — sign-outs and returns for every department's gear.
 [roles.dept_lead]
-description = "Department lead: sign-outs and returns for their department."
+description = "Department lead: sign-outs and returns for every department's gear."
 permissions = [
   "item.view",
   "item.damage",
@@ -177,11 +184,5 @@ group = "stash-volunteer"          # → volunteer
 role = "volunteer"
 
 [[bindings]]
-group = "stash-dept-lead"          # → dept_lead (all departments)
+group = "stash-dept-lead"          # → dept_lead
 role = "dept_lead"
-
-# Scope to one department (optional):
-# [[bindings]]
-# group = "stash-dept-foo"
-# role = "dept_lead"
-# department_id = "00000000-0000-0000-0000-000000000000"

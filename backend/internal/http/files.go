@@ -50,14 +50,14 @@ func toFileDTO(f sqlcgen.File) fileDTO {
 }
 
 func (h *fileHandler) routes(r chi.Router) {
-	upload := r.With(requireAny(domain.PermFileUpload))
+	upload := r.With(require(domain.PermFileUpload))
 	upload.Post("/presign-upload", h.presignUpload)
 	upload.Post("/upload", h.upload)
 	upload.Post("/", h.register)
 	r.Get("/", h.list)
 	r.With(h.onFile(false)).Get("/{id}/download", h.download)
 	r.With(h.onFile(false)).Get("/{id}/raw", h.raw)
-	r.With(requireAny(domain.PermFileUpload), h.onFile(true)).Delete("/{id}", h.delete)
+	r.With(require(domain.PermFileUpload), h.onFile(true)).Delete("/{id}", h.delete)
 }
 
 // entityAccess checks the permissions a file inherits from what it is

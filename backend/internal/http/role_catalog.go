@@ -8,8 +8,8 @@ import (
 	"github.com/AGlElectronics/stash/backend/internal/auth"
 )
 
-// roleCatalogEntry is one assignable (or informational) role in the shared
-// Con Services role-catalog contract consumed by HR.
+// roleCatalogEntry is one assignable role in the shared Con Services
+// role-catalog contract consumed by HR.
 type roleCatalogEntry struct {
 	Key         string   `json:"key"`
 	Label       string   `json:"label"`
@@ -18,52 +18,25 @@ type roleCatalogEntry struct {
 	Assignable  bool     `json:"assignable"`
 	Scope       string   `json:"scope"`
 	Permissions []string `json:"permissions"`
-	Note        string   `json:"note,omitempty"`
 }
 
-// roleCatalogHandler serves GET /api/role-catalog. Public and read-only: it
-// exposes role names, descriptions and the IdP group bound to each role so
-// HR can offer a picker. Groups come from the access config bindings.
+// roleCatalogHandler serves GET /api/role-catalog. Public and read-only.
+// Every role is global and listed once as stash_<role>. Its group is the
+// first group bound to it in access-config.toml, or the key itself: a
+// group named stash_<role> always grants the role.
 func roleCatalogHandler(access *auth.AccessConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		roles := make([]roleCatalogEntry, 0)
-		var bindings []auth.GroupBinding
-		if access != nil && access.Bindings != nil {
-			bindings = access.Bindings.All()
-		}
 		for _, role := range access.Roles() {
-			perms := sortedPerms(access.PermissionsForRole(role))
-			bound := false
-			for _, b := range bindings {
-				if b.RoleName != role {
-					continue
-				}
-				bound = true
-				scope := "global"
-				if b.DepartmentID != nil {
-					scope = "department:" + b.DepartmentID.String()
-				}
-				roles = append(roles, roleCatalogEntry{
-					Key:         role,
-					Label:       humanize(role),
-					Description: access.RoleDescription(role),
-					Group:       b.OIDCGroup,
-					Assignable:  true,
-					Scope:       scope,
-					Permissions: perms,
-				})
-			}
-			if !bound {
-				roles = append(roles, roleCatalogEntry{
-					Key:         role,
-					Label:       humanize(role),
-					Description: access.RoleDescription(role),
-					Assignable:  false,
-					Scope:       "global",
-					Permissions: perms,
-					Note:        "No IdP group is bound to this role in access-config.toml.",
-				})
-			}
+			roles = append(roles, roleCatalogEntry{
+				Key:         auth.RoleKey(role),
+				Label:       humanize(role),
+				Description: access.RoleDescription(role),
+				Group:       access.GroupForRole(role),
+				Assignable:  true,
+				Scope:       "global",
+				Permissions: sortedPerms(access.PermissionsForRole(role)),
+			})
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"module":       "stash",

@@ -66,18 +66,18 @@ func toLostFoundDTO(r sqlcgen.LostFoundReport) lostFoundDTO {
 // in the service where the before/after diff is known).
 func (h *lostFoundHandler) routes(r chi.Router) {
 	r.Group(func(g chi.Router) {
-		g.Use(requireAny(domain.PermLostfoundView))
+		g.Use(require(domain.PermLostfoundView))
 		g.Get("/", h.list)
 		g.Get("/by-number/{reportNumber}", h.getByReportNumber)
 		g.Get("/{id}", h.get)
 		g.Patch("/{id}", h.update)
 	})
 	r.Group(func(g chi.Router) {
-		g.Use(requireAny(domain.PermLostfoundCreate))
+		g.Use(require(domain.PermLostfoundCreate))
 		g.Post("/", h.create)
 	})
 	r.Group(func(g chi.Router) {
-		g.Use(requireAny(domain.PermLostfoundDelete))
+		g.Use(require(domain.PermLostfoundDelete))
 		g.Delete("/{id}", h.delete)
 	})
 }

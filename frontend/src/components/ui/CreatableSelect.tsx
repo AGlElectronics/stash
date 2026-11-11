@@ -16,6 +16,8 @@ type Props = {
   disabled?: boolean;
   placeholder?: string;
   entityLabel: string;
+  /** Offer "Create new …"; false for people without the manage permission. */
+  allowCreate?: boolean;
 };
 
 export function CreatableSelect({
@@ -25,7 +27,8 @@ export function CreatableSelect({
   onChange,
   onBlur,
   disabled,
-  placeholder = 'Search or type a new name…',
+  allowCreate = true,
+  placeholder = allowCreate ? 'Search or type a new name…' : 'Search…',
   entityLabel,
 }: Props) {
   const autoId = useId();
@@ -46,7 +49,10 @@ export function CreatableSelect({
   );
 
   const showCreate =
-    value.name.trim().length > 0 && !exact && !filtered.some((o) => o.name.toLowerCase() === q);
+    allowCreate &&
+    value.name.trim().length > 0 &&
+    !exact &&
+    !filtered.some((o) => o.name.toLowerCase() === q);
 
   const rows = useMemo(() => {
     const out: Array<{ kind: 'option'; opt: CreatableOption } | { kind: 'create' }> = [];

@@ -251,7 +251,7 @@ func (s *LostFoundService) Update(ctx context.Context, id uuid.UUID, in UpdateLo
 			if sys.PreserveSacredLostFound && domain.LostFoundReportIsSacred(before.ReportNumber) {
 				return httperror.New(httperror.CodeForbidden, "LF-0001 is the sacred test item and cannot be edited")
 			}
-			if err := auth.RequireAny(ctx, domain.PermLostfoundEdit); err != nil {
+			if err := auth.Require(ctx, domain.PermLostfoundEdit); err != nil {
 				return err
 			}
 		}
@@ -266,7 +266,7 @@ func (s *LostFoundService) Update(ctx context.Context, id uuid.UUID, in UpdateLo
 			switch domain.LostFoundStatus(*in.Status) {
 			case domain.LostFoundStatusOpen:
 				// Reopening requires an elevated permission (lead-only).
-				if err := auth.RequireAny(ctx, domain.PermLostfoundReopen); err != nil {
+				if err := auth.Require(ctx, domain.PermLostfoundReopen); err != nil {
 					return err
 				}
 				action = "lostfound.reopen"
@@ -275,7 +275,7 @@ func (s *LostFoundService) Update(ctx context.Context, id uuid.UUID, in UpdateLo
 				next.ResolvedAt = pgtype.Timestamptz{}
 				next.ResolutionNote = ""
 			case domain.LostFoundStatusReturned, domain.LostFoundStatusClosed:
-				if err := auth.RequireAny(ctx, domain.PermLostfoundResolve); err != nil {
+				if err := auth.Require(ctx, domain.PermLostfoundResolve); err != nil {
 					return err
 				}
 				action = "lostfound.close"
@@ -290,7 +290,7 @@ func (s *LostFoundService) Update(ctx context.Context, id uuid.UUID, in UpdateLo
 		// as a later correction (the latter counts as a resolve-level edit).
 		if in.ReturnedTo != nil && *in.ReturnedTo != before.ReturnedTo {
 			if !statusChanged {
-				if err := auth.RequireAny(ctx, domain.PermLostfoundResolve); err != nil {
+				if err := auth.Require(ctx, domain.PermLostfoundResolve); err != nil {
 					return err
 				}
 			}
@@ -298,7 +298,7 @@ func (s *LostFoundService) Update(ctx context.Context, id uuid.UUID, in UpdateLo
 		}
 		if in.ResolutionNote != nil && *in.ResolutionNote != before.ResolutionNote {
 			if !statusChanged {
-				if err := auth.RequireAny(ctx, domain.PermLostfoundResolve); err != nil {
+				if err := auth.Require(ctx, domain.PermLostfoundResolve); err != nil {
 					return err
 				}
 			}

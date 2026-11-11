@@ -11,7 +11,8 @@ import (
 )
 
 // Middleware authenticates the request based on cfg.AuthMode. In dev mode it
-// reads the X-Dev-User header (or DEV_DEFAULT_USER) and resolves a User. In
+// reads the X-Dev-User header (or DEV_DEFAULT_USER), "name" for an admin or
+// "name:role1,role2" for other roles, and resolves a User. In
 // OIDC mode it verifies the bearer JWT, then provisions/refreshes the user's
 // memberships based on the IdP-supplied groups/roles claim.
 func Middleware(cfg *config.Config, resolver *Resolver, oidcVerifier *OIDCVerifier) func(http.Handler) http.Handler {
@@ -27,8 +28,8 @@ func Middleware(cfg *config.Config, resolver *Resolver, oidcVerifier *OIDCVerifi
 				}
 				user, err := resolver.LoadOrProvisionDevUser(ctx, header)
 				if err != nil {
-					log.Ctx(ctx).Error().Err(err).Msg("dev auth failed")
-					httperror.Render(w, r, httperror.Internal(err))
+					log.Ctx(ctx).Warn().Err(err).Msg("dev auth failed")
+					httperror.Render(w, r, err)
 					return
 				}
 				ctx = WithUser(ctx, user)

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/AGlElectronics/stash/backend/internal/domain"
@@ -105,6 +106,37 @@ role = "does-not-exist"
 `)
 	if _, err := parseAccessConfig(src); err == nil {
 		t.Fatal("expected error for binding to unknown role")
+	}
+}
+
+func TestRolesForGroups_BindingsAndKeyNames(t *testing.T) {
+	cfg, err := parseAccessConfig([]byte(`
+[[bindings]]
+group = "stash-admin"
+role = "admin"
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	got := cfg.RolesForGroups([]string{"stash-admin", "stash_volunteer", "stash_nope", "other"})
+	if strings.Join(got, ",") != "admin,volunteer" {
+		t.Fatalf("roles = %v, want [admin volunteer]", got)
+	}
+	if g := cfg.GroupForRole(domain.RoleAdmin); g != "stash-admin" {
+		t.Errorf("admin group = %q, want the bound group", g)
+	}
+	if g := cfg.GroupForRole(domain.RoleVolunteer); g != "stash_volunteer" {
+		t.Errorf("volunteer group = %q, want the role key", g)
+	}
+}
+
+func TestShippedAccessConfigLoads(t *testing.T) {
+	cfg, err := LoadAccessConfig("../../../infra/access-config.toml")
+	if err != nil {
+		t.Fatalf("infra/access-config.toml: %v", err)
+	}
+	if got := cfg.RolesForGroups([]string{"stash-dept-lead"}); len(got) != 1 || got[0] != domain.RoleDeptLead {
+		t.Fatalf("stash-dept-lead → %v", got)
 	}
 }
 

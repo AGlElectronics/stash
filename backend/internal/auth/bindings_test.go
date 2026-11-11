@@ -1,13 +1,11 @@
 package auth
 
 import (
+	"strings"
 	"testing"
-
-	"github.com/google/uuid"
 )
 
 func TestParseGroupBindings_Valid(t *testing.T) {
-	deptID := uuid.New()
 	tomlSrc := []byte(`
 [[bindings]]
 group = "stash-admin"
@@ -16,7 +14,6 @@ role = "admin"
 [[bindings]]
 group = "stash-inventory"
 role = "inventory_manager"
-department_id = "` + deptID.String() + `"
 
 [[bindings]]
 group = "stash-readonly"
@@ -32,24 +29,21 @@ role = "readonly"
 	if len(all) != 3 {
 		t.Fatalf("got %d bindings, want 3", len(all))
 	}
-	if all[0].OIDCGroup != "stash-admin" || all[0].RoleName != "admin" || all[0].DepartmentID != nil {
+	if all[0].OIDCGroup != "stash-admin" || all[0].RoleName != "admin" {
 		t.Errorf("unexpected first binding: %+v", all[0])
-	}
-	if all[1].OIDCGroup != "stash-inventory" || all[1].DepartmentID == nil || *all[1].DepartmentID != deptID {
-		t.Errorf("unexpected dept-scoped binding: %+v", all[1])
 	}
 }
 
-func TestParseGroupBindings_RejectsBadDeptID(t *testing.T) {
+func TestParseGroupBindings_RejectsDepartmentScope(t *testing.T) {
 	tomlSrc := []byte(`
 [[bindings]]
-group = "stash-admin"
-role = "admin"
-department_id = "not-a-uuid"
+group = "stash-dept-foo"
+role = "dept_lead"
+department_id = "00000000-0000-0000-0000-000000000000"
 `)
 	_, err := parseGroupBindings(tomlSrc)
-	if err == nil {
-		t.Fatalf("expected error on bad department_id, got nil")
+	if err == nil || !strings.Contains(err.Error(), "roles are global") {
+		t.Fatalf("expected a 'roles are global' error, got %v", err)
 	}
 }
 

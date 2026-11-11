@@ -169,8 +169,10 @@ func AllPermissions() []string {
 	}
 }
 
-// Role names of the built-in roles. The access config file may define
-// additional roles or override the permission set of these.
+// Role names of the built-in roles. They are global: no role is limited to
+// one department. The role catalog publishes them as stash_<name>. The
+// access config file may define additional roles or override the
+// permission set of these.
 const (
 	RoleAdmin            = "admin"
 	RoleInventoryManager = "inventory_manager"
@@ -179,6 +181,7 @@ const (
 	RoleReadonly         = "readonly"
 	RoleFrontdesk        = "frontdesk"
 	RoleConopsLead       = "conops_lead"
+	RoleConopsReadonly   = "conops_readonly"
 )
 
 // DefaultRolePermissions is the built-in role → permission catalog, used when
@@ -216,6 +219,9 @@ func DefaultRolePermissions() map[string][]string {
 			PermLostfoundView, PermLostfoundCreate, PermLostfoundEdit, PermLostfoundResolve,
 			PermLostfoundReopen, PermLostfoundDelete,
 			PermAuditView, PermExportCreate, PermFileUpload,
+		},
+		RoleConopsReadonly: {
+			PermLostfoundView,
 		},
 	}
 }

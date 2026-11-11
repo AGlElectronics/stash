@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 
@@ -17,7 +18,7 @@ import (
 //
 // It is safe for concurrent reads: nothing is mutated after construction.
 type AccessConfig struct {
-	// Bindings maps OIDC group claims to roles (optionally dept-scoped).
+	// Bindings maps OIDC group claims to global roles.
 	Bindings *GroupBindings
 
 	rolePerms map[string]map[string]struct{}
@@ -38,7 +39,7 @@ func (c *AccessConfig) RoleDescription(role string) string {
 var defaultRoleDescriptions = map[string]string{
 	"admin":             "Everything in Stash, including access and settings.",
 	"inventory_manager": "Logistics team: items, sign-outs, locations and categories.",
-	"dept_lead":         "Department lead: sign-outs and returns for their department.",
+	"dept_lead":         "Department lead: sign-outs and returns for every department's gear.",
 	"volunteer":         "Look up items and run sign-outs.",
 	"readonly":          "Read-only view of inventory and sign-outs.",
 	"frontdesk":         "ConOps front desk: log and resolve Lost & Found.",
@@ -53,6 +54,51 @@ func DefaultAccessConfig() *AccessConfig {
 		Bindings:  &GroupBindings{byGroup: map[string][]GroupBinding{}},
 		rolePerms: defaultRolePermSets(),
 	}
+}
+
+// RoleKeyPrefix is put in front of every role name in the role catalog
+// (admin → stash_admin), so keys are unique across Con Services.
+const RoleKeyPrefix = "stash_"
+
+// RoleKey returns the catalog key of a role, e.g. "stash_admin".
+func RoleKey(role string) string { return RoleKeyPrefix + role }
+
+// RolesForGroups returns the sorted role names granted by the token's
+// groups. A group grants a role when a binding maps it to the role, or when
+// the group is named exactly like the role's catalog key (stash_volunteer
+// grants volunteer).
+func (c *AccessConfig) RolesForGroups(groups []string) []string {
+	if c == nil {
+		return nil
+	}
+	set := map[string]struct{}{}
+	for _, b := range c.Bindings.Lookup(groups) {
+		set[b.RoleName] = struct{}{}
+	}
+	for _, g := range groups {
+		if role, ok := strings.CutPrefix(g, RoleKeyPrefix); ok && c.HasRole(role) {
+			set[role] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for r := range set {
+		out = append(out, r)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// GroupForRole returns the IdP group HR should add people to for a role:
+// the first group bound to it in the file, otherwise the role's key.
+func (c *AccessConfig) GroupForRole(role string) string {
+	if c != nil {
+		for _, b := range c.Bindings.All() {
+			if b.RoleName == role {
+				return b.OIDCGroup
+			}
+		}
+	}
+	return RoleKey(role)
 }
 
 // PermissionsForRole returns the permission set for a role, or nil when the

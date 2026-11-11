@@ -228,10 +228,8 @@ function SignoutOpsSection() {
 }
 
 function InventoryHealthSection() {
-  const { me } = useMe();
   const depts = useDepartments();
-  const myDeptId = me?.primary_department_id || '';
-  const [scope, setScope] = useState<'mine' | 'all'>(myDeptId ? 'mine' : 'all');
+  const [deptId, setDeptId] = useState('');
 
   const items = useQuery({
     queryKey: ['dashboard-items'],
@@ -240,11 +238,11 @@ function InventoryHealthSection() {
 
   const scoped = useMemo(() => {
     const rows = items.data?.items ?? [];
-    if (scope === 'mine' && myDeptId) {
-      return rows.filter((i) => i.managed_by_department_id === myDeptId);
+    if (deptId) {
+      return rows.filter((i) => i.managed_by_department_id === deptId);
     }
     return rows;
-  }, [items.data, scope, myDeptId]);
+  }, [items.data, deptId]);
 
   const lowStock = scoped.filter(
     (i) =>
@@ -258,32 +256,26 @@ function InventoryHealthSection() {
     (i) => i.status !== 'retired' && isExpiringSoon(i.expiry_date)
   );
 
-  const myDeptName = myDeptId
-    ? depts.data?.items.find((d) => d.id === myDeptId)?.name ?? 'My department'
-    : null;
-
   return (
     <section>
       <div className="flex items-center justify-between gap-2 mb-3">
         <h2 className="font-heading font-bold text-sm uppercase tracking-wide text-muted-foreground">
           Inventory health
         </h2>
-        {myDeptId ? (
-          <div className="inline-flex items-center gap-1 rounded-pill bg-muted p-1">
-            {(['mine', 'all'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setScope(v)}
-                className={cn(
-                  'rounded-pill px-3 py-1 text-xs font-semibold transition-colors',
-                  scope === v ? 'bg-card shadow-card' : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {v === 'mine' ? myDeptName : 'All departments'}
-              </button>
+        {(depts.data?.items.length ?? 0) > 0 ? (
+          <select
+            aria-label="Department"
+            value={deptId}
+            onChange={(e) => setDeptId(e.target.value)}
+            className="rounded-pill bg-muted px-3 py-1 text-xs font-semibold"
+          >
+            <option value="">All departments</option>
+            {depts.data?.items.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
             ))}
-          </div>
+          </select>
         ) : null}
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">

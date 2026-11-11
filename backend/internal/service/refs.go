@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/AGlElectronics/stash/backend/internal/auth"
+	"github.com/AGlElectronics/stash/backend/internal/domain"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
 	"github.com/AGlElectronics/stash/backend/internal/repository/sqlcgen"
 )
@@ -30,7 +33,17 @@ type locationResolver interface {
 	CreateLocation(ctx context.Context, arg sqlcgen.CreateLocationParams) (sqlcgen.Location, error)
 }
 
-// resolveDepartmentRefTx returns id when set, otherwise finds or creates by name.
+// mayCreateRef allows creating a department, category or location by name
+// only for users who could also create it on its own page.
+func mayCreateRef(ctx context.Context, managePerm, kind, name string) error {
+	if auth.HasPermission(ctx, managePerm) {
+		return nil
+	}
+	return httperror.Validation(fmt.Sprintf("%s %q does not exist; pick an existing one or ask someone with %s to add it", kind, name, managePerm), nil)
+}
+
+// resolveDepartmentRefTx returns id when set, otherwise finds by name and,
+// for users with department.manage, creates it.
 func resolveDepartmentRefTx(ctx context.Context, q deptResolver, id *uuid.UUID, name string) (*uuid.UUID, error) {
 	if id != nil {
 		return id, nil
@@ -45,6 +58,9 @@ func resolveDepartmentRefTx(ctx context.Context, q deptResolver, id *uuid.UUID, 
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, httperror.Internal(err)
+	}
+	if err := mayCreateRef(ctx, domain.PermDepartmentManage, "department", name); err != nil {
+		return nil, err
 	}
 	created, err := q.CreateDepartment(ctx, sqlcgen.CreateDepartmentParams{
 		Name:        name,
@@ -74,6 +90,9 @@ func resolveCategoryRefTx(ctx context.Context, q categoryResolver, id *uuid.UUID
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, httperror.Internal(err)
 	}
+	if err := mayCreateRef(ctx, domain.PermCategoryManage, "category", name); err != nil {
+		return nil, err
+	}
 	created, err := q.CreateCategory(ctx, sqlcgen.CreateCategoryParams{
 		Name:        name,
 		Description: "",
@@ -101,6 +120,9 @@ func resolveLocationRefTx(ctx context.Context, q locationResolver, id *uuid.UUID
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, httperror.Internal(err)
+	}
+	if err := mayCreateRef(ctx, domain.PermLocationManage, "location", name); err != nil {
+		return nil, err
 	}
 	created, err := q.CreateLocation(ctx, sqlcgen.CreateLocationParams{
 		ParentID:    nil,

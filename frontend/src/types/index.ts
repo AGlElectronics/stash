@@ -111,9 +111,9 @@ export type Me = {
   display_name: string;
   email: string;
   oidc_subject: string;
-  memberships: Array<{ department_id: string | null; role: string }>;
+  /** Global role keys, e.g. "stash_volunteer". */
+  roles: string[];
   permissions: string[];
-  primary_department_id: string;
 };
 
 export type Paginated<T> = {

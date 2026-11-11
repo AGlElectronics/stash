@@ -24,8 +24,15 @@ the same version. Rebuilds get no entry here.
 - Lost & Found desk: lost reports and handed-in finds with photos and
   report numbers, matching and hand-back, and an optional public claim
   page for guests (`PUBLIC_LOSTFOUND_CLAIM_ENABLED`).
-- Permissions per department, an audit log, a per-item history and CSV
-  exports.
+- Roles and permissions from `access-config.toml`, an audit log, a
+  per-item history and CSV exports. Roles are global: a department lead
+  handles every department's gear. `GET /api/role-catalog` lists each
+  role once as `stash_<role>` (for example `stash_volunteer`), and a
+  Keycloak group with exactly that name grants the role without a
+  binding. `GET /api/me` returns `roles` (catalog keys) and `permissions`.
+- Dev sign-in (`AUTH_MODE=dev`) can use roles other than admin:
+  `X-Dev-User: bob:volunteer` or `bob:frontdesk,readonly`. A plain name is
+  still an admin.
 - `DEN_MODE=required` keeps the module locked until it is paired with Den:
   the API answers `503 den_pairing_required` (except health, brand, sign-in
   and the Den connection routes) and the public `GET /api/den/state`
@@ -75,6 +82,12 @@ the same version. Rebuilds get no entry here.
 
 ### Security
 
+- Only people with `department.manage`, `category.manage` or
+  `location.manage` can create departments, categories and locations,
+  also by typing a new name in the item form. People who can only create
+  or edit items pick from the existing entries.
+- A `department_id` on a binding in `access-config.toml` stops the backend
+  at startup with "roles are global, remove the line".
 - The backend reads the client address from `X-Forwarded-For` only when
   the connection comes from a trusted proxy (`TRUSTED_PROXY_CIDRS`), and
   ignores `X-Real-IP` and `True-Client-IP`.

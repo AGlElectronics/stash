@@ -1,6 +1,7 @@
 // Dev auth shim. When the backend runs with AUTH_MODE=dev it accepts a
 // X-Dev-User header. The frontend sends the value of localStorage["stash.devUser"]
-// or "dev-admin" by default. v0.4 will replace this with oidc-client-ts.
+// or "dev-admin" by default. "name" signs in as an admin; "name:volunteer" or
+// "name:frontdesk,readonly" signs in with only those roles.
 
 import { setAuthHeadersResolver } from '@/api/client';
 

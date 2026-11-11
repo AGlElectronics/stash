@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -76,6 +77,27 @@ func TestRoutesRejectMissingPermissions(t *testing.T) {
 				t.Fatalf("%s %s: status %d, want 403 (%s)", c.method, c.path, rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+func TestRoleCatalogPublishesGlobalPrefixedRoles(t *testing.T) {
+	rec := httptest.NewRecorder()
+	roleCatalogHandler(auth.DefaultAccessConfig())(rec, httptest.NewRequest(http.MethodGet, "/api/role-catalog", nil))
+	var body struct {
+		Roles []roleCatalogEntry `json:"roles"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, r := range body.Roles {
+		if !strings.HasPrefix(r.Key, "stash_") || r.Scope != "global" || r.Group == "" || seen[r.Key] {
+			t.Errorf("bad catalog entry %+v", r)
+		}
+		seen[r.Key] = true
+	}
+	if !seen["stash_admin"] || !seen["stash_dept_lead"] {
+		t.Fatalf("missing built-in roles: %v", seen)
 	}
 }
 

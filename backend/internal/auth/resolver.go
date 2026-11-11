@@ -3,12 +3,13 @@ package auth
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/AGlElectronics/stash/backend/internal/domain"
+	"github.com/AGlElectronics/stash/backend/internal/httperror"
 	"github.com/AGlElectronics/stash/backend/internal/repository/sqlcgen"
 )
 
@@ -25,21 +26,41 @@ func NewResolver(pool *pgxpool.Pool, access *AccessConfig) *Resolver {
 	return &Resolver{pool: pool, access: access}
 }
 
-// LoadOrProvisionDevUser is used by the dev bypass middleware. The header
-// value becomes part of an oidc_subject of the form "dev:<value>". Dev users
-// always get the global admin role so dev work is unblocked.
-func (r *Resolver) LoadOrProvisionDevUser(ctx context.Context, headerValue string) (*User, error) {
-	headerValue = strings.TrimSpace(headerValue)
-	if headerValue == "" {
-		headerValue = "dev-admin"
+// ParseDevUser splits a dev-mode user value of the form "name" or
+// "name:role1,role2". Without roles the user is an admin. Roles may be
+// written with or without the stash_ prefix.
+func ParseDevUser(value string) (name string, roles []string) {
+	value = strings.TrimSpace(value)
+	name, list, _ := strings.Cut(value, ":")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "dev-admin"
 	}
-	subject := "dev:" + headerValue
+	for _, r := range strings.Split(list, ",") {
+		r = strings.TrimPrefix(strings.TrimSpace(r), RoleKeyPrefix)
+		if r != "" {
+			roles = append(roles, r)
+		}
+	}
+	if len(roles) == 0 {
+		roles = []string{domain.RoleAdmin}
+	}
+	return name, roles
+}
 
-	display := strings.ToTitle(strings.ReplaceAll(headerValue, "-", " "))
-	if display == "" {
-		display = headerValue
+// LoadOrProvisionDevUser is used by the dev bypass middleware. The user is
+// stored with the oidc_subject "dev:<name>"; the roles come from the header
+// value (see ParseDevUser) and must exist in the role catalog.
+func (r *Resolver) LoadOrProvisionDevUser(ctx context.Context, headerValue string) (*User, error) {
+	name, roles := ParseDevUser(headerValue)
+	for _, role := range roles {
+		if !r.access.HasRole(role) {
+			return nil, httperror.New(httperror.CodeForbidden, fmt.Sprintf("unknown dev role %q", role))
+		}
 	}
-	email := headerValue + "@stash.local"
+	subject := "dev:" + name
+	display := strings.ToTitle(strings.ReplaceAll(name, "-", " "))
+	email := name + "@stash.local"
 
 	q := sqlcgen.New(r.pool)
 	row, err := q.UpsertUserBySubject(ctx, sqlcgen.UpsertUserBySubjectParams{
@@ -50,15 +71,14 @@ func (r *Resolver) LoadOrProvisionDevUser(ctx context.Context, headerValue strin
 	if err != nil {
 		return nil, fmt.Errorf("provision dev user: %w", err)
 	}
-
-	return r.buildUser(row, []GroupBinding{{RoleName: domain.RoleAdmin}}), nil
+	return r.buildUser(row, roles), nil
 }
 
 // LoadOrProvisionOIDCUser is called by the OIDC middleware after a successful
 // JWT verification. It upserts the identity row, then computes the user's
-// memberships and permissions from the access config and the token's groups.
-// Nothing role-related is persisted: revoking a group in the IdP or editing
-// the config file takes effect on the next request / pod restart.
+// roles and permissions from the access config and the token's groups.
+// Nothing role-related is persisted: removing a group in the IdP takes
+// effect on the next token.
 func (r *Resolver) LoadOrProvisionOIDCUser(ctx context.Context, claims *OIDCClaims) (*User, error) {
 	subject := claims.Subject
 	display := displayNameFromClaims(claims)
@@ -76,50 +96,26 @@ func (r *Resolver) LoadOrProvisionOIDCUser(ctx context.Context, claims *OIDCClai
 	}
 
 	// Merge both groups and roles claims so the config file can bind on either.
-	combined := append(claims.Groups, claims.Roles...)
-	return r.buildUser(row, r.access.Bindings.Lookup(combined)), nil
+	combined := append(append([]string{}, claims.Groups...), claims.Roles...)
+	return r.buildUser(row, r.access.RolesForGroups(combined)), nil
 }
 
 // buildUser assembles the request principal from the identity row and the
-// matched bindings. Memberships are deduplicated by (department, role).
-func (r *Resolver) buildUser(row sqlcgen.User, bindings []GroupBinding) *User {
-	memberships := make([]Membership, 0, len(bindings))
-	seen := map[string]struct{}{}
-	for _, b := range bindings {
-		key := b.RoleName
-		if b.DepartmentID != nil {
-			key = b.DepartmentID.String() + "|" + b.RoleName
-		}
-		if _, ok := seen[key]; ok {
-			continue
-		}
-		seen[key] = struct{}{}
-		memberships = append(memberships, Membership{DepartmentID: b.DepartmentID, Role: b.RoleName})
-	}
-
-	globalPerms := map[string]struct{}{}
-	deptPerms := map[uuid.UUID]map[string]struct{}{}
-	for _, m := range memberships {
-		set := r.access.PermissionsForRole(m.Role)
-		if set == nil {
-			continue
-		}
-		if m.DepartmentID == nil {
-			for p := range set {
-				globalPerms[p] = struct{}{}
-			}
-			continue
-		}
-		d := *m.DepartmentID
-		scoped, ok := deptPerms[d]
-		if !ok {
-			scoped = map[string]struct{}{}
-			deptPerms[d] = scoped
-		}
-		for p := range set {
-			scoped[p] = struct{}{}
+// user's roles.
+func (r *Resolver) buildUser(row sqlcgen.User, roles []string) *User {
+	perms := map[string]struct{}{}
+	uniq := map[string]struct{}{}
+	for _, role := range roles {
+		uniq[role] = struct{}{}
+		for p := range r.access.PermissionsForRole(role) {
+			perms[p] = struct{}{}
 		}
 	}
+	sorted := make([]string, 0, len(uniq))
+	for role := range uniq {
+		sorted = append(sorted, role)
+	}
+	sort.Strings(sorted)
 
 	email := ""
 	if row.Email != nil {
@@ -129,15 +125,13 @@ func (r *Resolver) buildUser(row sqlcgen.User, bindings []GroupBinding) *User {
 	if row.OidcSubject != nil {
 		subject = *row.OidcSubject
 	}
-
 	return &User{
-		ID:              row.ID,
-		OIDCSubject:     subject,
-		Email:           email,
-		DisplayName:     row.DisplayName,
-		Memberships:     memberships,
-		Permissions:     globalPerms,
-		DeptPermissions: deptPerms,
+		ID:          row.ID,
+		OIDCSubject: subject,
+		Email:       email,
+		DisplayName: row.DisplayName,
+		Roles:       sorted,
+		Permissions: perms,
 	}
 }
 

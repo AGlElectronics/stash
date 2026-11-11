@@ -130,13 +130,13 @@ func uuidPtrToString2(u *uuid.UUID) *string {
 }
 
 func (h *signoutHandler) routes(r chi.Router) {
-	r.With(requireAny(domain.PermSignoutView)).Get("/", h.list)
-	r.With(requireAny(domain.PermSignoutCreate)).Post("/", h.create)
-	r.With(requireAny(domain.PermSignoutView)).Get("/{id}", h.get)
-	r.With(requireAny(domain.PermSignoutConfirm)).Post("/{id}/confirm", h.confirm)
-	r.With(requireAny(domain.PermSignoutReturn)).Post("/{id}/return", h.returnLines)
-	r.With(requireAny(domain.PermSignoutCancel)).Post("/{id}/cancel", h.cancel)
-	r.With(requireAny(domain.PermSignoutClose)).Post("/{id}/close", h.close)
+	r.With(require(domain.PermSignoutView)).Get("/", h.list)
+	r.With(require(domain.PermSignoutCreate)).Post("/", h.create)
+	r.With(require(domain.PermSignoutView)).Get("/{id}", h.get)
+	r.With(require(domain.PermSignoutConfirm)).Post("/{id}/confirm", h.confirm)
+	r.With(require(domain.PermSignoutReturn)).Post("/{id}/return", h.returnLines)
+	r.With(require(domain.PermSignoutCancel)).Post("/{id}/cancel", h.cancel)
+	r.With(require(domain.PermSignoutClose)).Post("/{id}/close", h.close)
 }
 
 func (h *signoutHandler) list(w http.ResponseWriter, r *http.Request) {

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
 import { CreatableSelect, type CreatablePick } from '@/components/ui/CreatableSelect';
 import { useCategories, useDepartments, useLocations } from '@/hooks/useReferenceData';
+import { PERMS, useMe } from '@/hooks/useMe';
 import { buildLocationPathMap } from '@/lib/locationPath';
 import { creatablePickFromDom } from '@/lib/resolveCreatableRef';
 
@@ -61,6 +62,7 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
   const cats = useCategories();
   const depts = useDepartments();
   const locs = useLocations();
+  const { can } = useMe();
 
   const containers = useQuery({
     queryKey: ['containers-lookup'],
@@ -219,6 +221,7 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
                   onChange={field.onChange}
                   onBlur={field.onBlur}
                   entityLabel="category"
+                  allowCreate={can(PERMS.categoryManage)}
                 />
               )}
             />
@@ -249,6 +252,7 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
                   onChange={field.onChange}
                   onBlur={field.onBlur}
                   entityLabel="department"
+                  allowCreate={can(PERMS.departmentManage)}
                 />
               )}
             />
@@ -265,6 +269,7 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
                   onChange={field.onChange}
                   onBlur={field.onBlur}
                   entityLabel="department"
+                  allowCreate={can(PERMS.departmentManage)}
                 />
               )}
             />
@@ -282,6 +287,7 @@ export function ItemForm({ defaultValues, onSubmit, submitLabel = 'Save', busy, 
                     onChange={field.onChange}
                     onBlur={field.onBlur}
                     entityLabel="location"
+                    allowCreate={can(PERMS.locationManage)}
                   />
                 )}
               />

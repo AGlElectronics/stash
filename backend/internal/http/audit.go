@@ -24,7 +24,7 @@ func auditLogHandler(pool *pgxpool.Pool) func(chi.Router) {
 
 func listAuditLog(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := auth.RequireGlobal(r.Context(), domain.PermAuditView); err != nil {
+		if err := auth.Require(r.Context(), domain.PermAuditView); err != nil {
 			httperror.Render(w, r, err)
 			return
 		}
@@ -101,7 +101,7 @@ func locationExportPath(locs []sqlcgen.Location, id *uuid.UUID) string {
 // Optional query: parent_container_id — export only direct contents of that container.
 func exportItemsCSV(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := auth.RequireGlobal(r.Context(), domain.PermExportCreate); err != nil {
+		if err := auth.Require(r.Context(), domain.PermExportCreate); err != nil {
 			httperror.Render(w, r, err)
 			return
 		}
@@ -223,7 +223,7 @@ func deptLookup(m map[uuid.UUID]string, id *uuid.UUID) string {
 // exportSignoutsCSV streams a CSV of all sign-outs.
 func exportSignoutsCSV(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := auth.RequireGlobal(r.Context(), domain.PermExportCreate); err != nil {
+		if err := auth.Require(r.Context(), domain.PermExportCreate); err != nil {
 			httperror.Render(w, r, err)
 			return
 		}

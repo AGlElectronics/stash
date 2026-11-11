@@ -1,6 +1,27 @@
 package auth
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestParseDevUser(t *testing.T) {
+	cases := []struct {
+		in, name, roles string
+	}{
+		{"", "dev-admin", "admin"},
+		{"alice", "alice", "admin"},
+		{"bob:volunteer", "bob", "volunteer"},
+		{"carol: stash_frontdesk , readonly", "carol", "frontdesk,readonly"},
+		{"dave:", "dave", "admin"},
+	}
+	for _, c := range cases {
+		name, roles := ParseDevUser(c.in)
+		if name != c.name || strings.Join(roles, ",") != c.roles {
+			t.Errorf("ParseDevUser(%q) = %q %v, want %q %s", c.in, name, roles, c.name, c.roles)
+		}
+	}
+}
 
 func TestDisplayNameFromClaims(t *testing.T) {
 	sub := "f47ac10b-58cc-4372-a567-0e02b2c3d479"

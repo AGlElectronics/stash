@@ -198,6 +198,10 @@ the same version. Rebuilds get no entry here.
 
 These matter if you ran a pre-release build of Stash.
 
+- The shared `denlink` copy can fetch a module-setting secret from Den,
+  list the organisation's paired modules, and check a call Den makes into
+  Stash. Den errors in the log now start with a lowercase letter. The
+  sentence on the Den connection page is unchanged.
 - **BREAKING:** the backend accepts only **access tokens** whose audience
   (`aud`) contains `OIDC_AUDIENCE`, now `stash-api` by default; ID tokens
   are refused. The web app sends the access token. Before upgrading, add

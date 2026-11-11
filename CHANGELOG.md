@@ -36,6 +36,17 @@ the same version. Rebuilds get no entry here.
   show the organisation logo again (as a grayscale image; turn it off per
   print).
 - `/scan?code=<code>` opens the item or Lost & Found report with that code.
+- Import & export page. `POST /api/items/import` (CSV as the body or the
+  `file` form field, up to 5 MiB and 5,000 rows) creates items from rows
+  without an `id` and changes the items named by `id`; empty cells leave a
+  field unchanged, a different `quantity_owned` is recorded as an
+  adjustment. `?dry_run=true` checks every row and saves nothing; a real
+  import saves all rows or none (`422` with a per-row report). The items
+  export can be imported again as it is.
+- Ready-made exports at `GET /api/export/reports/{report}.csv`: `low-stock`,
+  `damaged`, `lost`, `expiring` (within 60 days), `retired` and
+  `overdue-signouts` (`GET /api/export/reports` lists them). They need
+  `export.create` and are audited as `export.report`.
 - Item page → Documents: attach, download and delete receipts, invoices,
   manuals, warranties and other files (up to 50 MB each).
 - Settings → Privacy and notifications: Lost & Found retention, the last

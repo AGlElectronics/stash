@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pressly/goose/v3"
 
 	"github.com/AGlElectronics/stash/backend/internal/auth"
 	"github.com/AGlElectronics/stash/backend/internal/db"
@@ -89,6 +90,7 @@ func migrate(ctx context.Context, admin, pool *pgxpool.Pool) error {
 	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", lockKey); err != nil {
 		return err
 	}
+	goose.SetLogger(goose.NopLogger())
 	defer func() { _, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", lockKey) }()
 	return db.MigrateUp(ctx, pool)
 }

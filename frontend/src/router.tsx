@@ -29,6 +29,7 @@ import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { ScanCodePage } from '@/pages/ScanCodePage';
+import { ImportExportPage } from '@/pages/ImportExportPage';
 import { SignoutDetailPage } from '@/pages/SignoutDetailPage';
 import { SignoutNewPage } from '@/pages/SignoutNewPage';
 import { SignoutsListPage } from '@/pages/SignoutsListPage';
@@ -259,6 +260,12 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const importExportRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/import-export',
+  component: ImportExportPage,
+});
+
 const usersRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/users',
@@ -294,6 +301,7 @@ const routeTree = rootRoute.addChildren([
     auditLogRoute,
     settingsRoute,
     usersRoute,
+    importExportRoute,
   ]),
 ]);
 

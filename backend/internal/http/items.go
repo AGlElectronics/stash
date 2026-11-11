@@ -109,6 +109,7 @@ func (h *itemHandler) routes(r chi.Router) {
 	view := r.With(require(domain.PermItemView))
 	view.Get("/", h.list)
 	r.With(require(domain.PermItemCreate)).Post("/", h.create)
+	r.With(requireAnyOf(domain.PermItemCreate, domain.PermItemEdit)).Post("/import", h.importItems)
 	// Static prefixes must be registered before "/{id}" so chi's tree
 	// resolves them deterministically.
 	view.Get("/by-barcode/{code}", h.lookupByBarcode)

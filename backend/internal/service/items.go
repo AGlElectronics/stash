@@ -238,6 +238,21 @@ func (s *ItemService) Availability(ctx context.Context, id uuid.UUID) (Availabil
 // ----------------------------------------------------------------------------
 
 func (s *ItemService) Create(ctx context.Context, in CreateItemInput) (sqlcgen.Item, error) {
+	sys, err := NewSettingsService(s.pool).Get(ctx)
+	if err != nil {
+		return sqlcgen.Item{}, err
+	}
+	var out sqlcgen.Item
+	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.createInTx(ctx, tx, in, sys)
+		return err
+	})
+	return out, err
+}
+
+// createInTx is Create inside the caller's transaction.
+func (s *ItemService) createInTx(ctx context.Context, tx pgx.Tx, in CreateItemInput, sys SystemSettings) (sqlcgen.Item, error) {
 	in.Name = strings.TrimSpace(in.Name)
 	if in.Name == "" {
 		return sqlcgen.Item{}, httperror.Validation("name is required", nil)
@@ -257,10 +272,6 @@ func (s *ItemService) Create(ctx context.Context, in CreateItemInput) (sqlcgen.I
 	if in.Status == "" {
 		in.Status = string(domain.ItemStatusAvailable)
 	}
-	sys, err := NewSettingsService(s.pool).Get(ctx)
-	if err != nil {
-		return sqlcgen.Item{}, err
-	}
 	if in.Owner == "" {
 		in.Owner = sys.DefaultOwnerOrEmpty()
 	}
@@ -269,7 +280,7 @@ func (s *ItemService) Create(ctx context.Context, in CreateItemInput) (sqlcgen.I
 	}
 
 	var out sqlcgen.Item
-	err = db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+	err := func() error {
 		qtx := sqlcgen.New(tx)
 
 		categoryID, err := resolveCategoryRefTx(ctx, qtx, in.CategoryID, in.CategoryName)
@@ -343,11 +354,22 @@ func (s *ItemService) Create(ctx context.Context, in CreateItemInput) (sqlcgen.I
 			return err
 		}
 		return audit.Record(ctx, qtx, "item.create", "item", row.ID, nil, row, "")
-	})
+	}()
 	return out, err
 }
 
 func (s *ItemService) Update(ctx context.Context, id uuid.UUID, in UpdateItemInput) (sqlcgen.Item, error) {
+	var out sqlcgen.Item
+	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		out, err = s.updateInTx(ctx, tx, id, in)
+		return err
+	})
+	return out, err
+}
+
+// updateInTx is Update inside the caller's transaction.
+func (s *ItemService) updateInTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, in UpdateItemInput) (sqlcgen.Item, error) {
 	if in.Name != nil {
 		v := strings.TrimSpace(*in.Name)
 		if v == "" {
@@ -360,7 +382,7 @@ func (s *ItemService) Update(ctx context.Context, id uuid.UUID, in UpdateItemInp
 	}
 
 	var out sqlcgen.Item
-	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+	err := func() error {
 		qtx := sqlcgen.New(tx)
 		before, err := qtx.GetItem(ctx, id)
 		if err != nil {
@@ -443,7 +465,7 @@ func (s *ItemService) Update(ctx context.Context, id uuid.UUID, in UpdateItemInp
 			}
 		}
 		return audit.Record(ctx, qtx, "item.update", "item", id, before, row, "")
-	})
+	}()
 	return out, err
 }
 
@@ -500,11 +522,22 @@ type AdjustInput struct {
 }
 
 func (s *ItemService) AdjustQuantity(ctx context.Context, id uuid.UUID, in AdjustInput) (sqlcgen.Item, error) {
+	var out sqlcgen.Item
+	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		var err error
+		out, err = adjustInTx(ctx, tx, id, in)
+		return err
+	})
+	return out, err
+}
+
+// adjustInTx is AdjustQuantity inside the caller's transaction.
+func adjustInTx(ctx context.Context, tx pgx.Tx, id uuid.UUID, in AdjustInput) (sqlcgen.Item, error) {
 	if in.Delta == 0 {
 		return sqlcgen.Item{}, httperror.Validation("delta must be non-zero", nil)
 	}
 	var out sqlcgen.Item
-	err := db.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+	err := func() error {
 		qtx := sqlcgen.New(tx)
 		before, err := qtx.GetItem(ctx, id)
 		if err != nil {
@@ -531,7 +564,7 @@ func (s *ItemService) AdjustQuantity(ctx context.Context, id uuid.UUID, in Adjus
 			return err
 		}
 		return audit.Record(ctx, qtx, "item.adjust", "item", id, before, row, in.Note)
-	})
+	}()
 	return out, err
 }
 

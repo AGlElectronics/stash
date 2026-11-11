@@ -10,6 +10,7 @@ import { isDenPairingRequired, useDenState } from '@/hooks/useDenState';
 import { useMe, PERMS } from '@/hooks/useMe';
 import {
   Boxes,
+  FileSpreadsheet,
   FolderTree,
   LayoutDashboard,
   LogOut,
@@ -45,6 +46,12 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/items', label: 'Items', icon: Boxes, perms: [PERMS.itemView] },
       { to: '/items/by-department', label: 'By department', icon: FolderTree, perms: [PERMS.itemView] },
+      {
+        to: '/import-export',
+        label: 'Import & export',
+        icon: FileSpreadsheet,
+        perms: [PERMS.itemCreate, PERMS.itemEdit, PERMS.exportCreate],
+      },
     ],
   },
   {

@@ -182,6 +182,8 @@ func NewRouter(deps Deps, version string) http.Handler {
 			secure.Get("/export/items.csv", exportItemsCSV(deps.Pool))
 			secure.Get("/export/signouts.csv", exportSignoutsCSV(deps.Pool))
 			secure.Get("/export/lostfound.csv", exportLostFoundCSV(deps.Pool))
+			secure.With(require(domain.PermExportCreate)).Get("/export/reports", listPlannedReports)
+			secure.Get("/export/reports/{report}.csv", exportPlannedReport(deps.Pool))
 			secure.Route("/files", fileH.routes)
 		})
 	})

@@ -21,6 +21,10 @@ import (
 	"github.com/AGlElectronics/stash/backend/internal/denlink"
 	"github.com/AGlElectronics/stash/backend/internal/files"
 	httpx "github.com/AGlElectronics/stash/backend/internal/http"
+	"github.com/AGlElectronics/stash/backend/internal/jobs"
+	"github.com/AGlElectronics/stash/backend/internal/mail"
+	"github.com/AGlElectronics/stash/backend/internal/service"
+	"github.com/AGlElectronics/stash/backend/internal/telegram"
 	"github.com/AGlElectronics/stash/backend/internal/tlscert"
 )
 
@@ -104,6 +108,17 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 	}
 	go den.Run(ctx)
 
+	settings := service.NewSettingsService(pool).WithDen(service.DenSource(den))
+	var bot *telegram.Client
+	if cfg.TelegramBotToken != "" {
+		bot = telegram.New(cfg.TelegramBotToken, cfg.TelegramAPIURL)
+	}
+	lfBot := service.NewLostFoundTelegram(pool, settings, bot, logger)
+	overdue := service.NewOverdueService(pool, settings, mail.SMTP{}, cfg.SMTPPassword, cfg.AppBaseURL, logger)
+	if cfg.JobsEnabled {
+		go jobs.NewLeader(pool, logger, backgroundJobs(pool, settings, filesSvc, overdue, logger), lfBot.Run).Run(ctx)
+	}
+
 	router := httpx.NewRouter(httpx.Deps{
 		Den:          den,
 		Config:       cfg,
@@ -112,6 +127,8 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 		Files:        filesSvc,
 		OIDCVerifier: oidcVerifier,
 		Access:       access,
+		Telegram:     lfBot,
+		Overdue:      overdue,
 	}, Version)
 
 	server := &nethttp.Server{
@@ -125,6 +142,39 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 	}
 
 	return runServer(ctx, server, pool, cfg.ShutdownTimeout, logger)
+}
+
+// backgroundJobs are run by the leader replica (see internal/jobs).
+func backgroundJobs(pool *pgxpool.Pool, settings *service.SettingsService, objects service.ObjectRemover, overdue *service.OverdueService, logger zerolog.Logger) []jobs.Job {
+	retention := service.NewRetentionService(pool, settings, objects)
+	users := service.NewUserService(pool)
+	return []jobs.Job{
+		{Name: "lostfound-retention", Every: time.Hour, Run: func(ctx context.Context) error {
+			res, err := retention.PurgeLostFound(ctx, time.Now())
+			if len(res.Deleted) > 0 {
+				logger.Info().Int("reports", len(res.Deleted)).Str("mode", res.Mode).Msg("lost & found retention: reports deleted")
+			}
+			return err
+		}},
+		{Name: "user-anonymise", Every: 6 * time.Hour, Run: func(ctx context.Context) error {
+			set, err := settings.Get(ctx)
+			if err != nil {
+				return err
+			}
+			n, err := users.AnonymiseInactive(ctx, set.UserInactiveDays, time.Now())
+			if n > 0 {
+				logger.Info().Int("users", n).Msg("inactive users anonymised")
+			}
+			return err
+		}},
+		{Name: "overdue-reminders", Every: time.Hour, Run: func(ctx context.Context) error {
+			n, err := overdue.SendReminders(ctx, time.Now())
+			if n > 0 {
+				logger.Info().Int("signouts", n).Msg("overdue reminders sent")
+			}
+			return err
+		}},
+	}
 }
 
 func runServer(ctx context.Context, server *nethttp.Server, pool *pgxpool.Pool, shutdownTimeout time.Duration, logger zerolog.Logger) error {

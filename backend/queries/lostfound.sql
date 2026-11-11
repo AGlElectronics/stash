@@ -1,6 +1,24 @@
 -- name: GetLostFoundReport :one
 SELECT * FROM lost_found_reports WHERE id = $1 AND removed_at IS NULL;
 
+-- name: GetLostFoundReportAny :one
+-- Also finds removed reports (retention purges those too).
+SELECT * FROM lost_found_reports WHERE id = $1;
+
+-- name: LinkLostFoundTelegram :one
+-- A guest sent /start <report number> to the bot.
+UPDATE lost_found_reports
+SET telegram_chat_id = $2, telegram_linked_at = now(), updated_at = now()
+WHERE report_number = $1 AND removed_at IS NULL
+RETURNING *;
+
+-- name: UnlinkTelegramChat :many
+-- A guest sent /stop: forget their chat on every report.
+UPDATE lost_found_reports
+SET telegram_chat_id = NULL, telegram_linked_at = NULL, updated_at = now()
+WHERE telegram_chat_id = $1
+RETURNING id;
+
 -- name: GetLostFoundByReportNumber :one
 SELECT * FROM lost_found_reports WHERE report_number = $1 AND removed_at IS NULL;
 

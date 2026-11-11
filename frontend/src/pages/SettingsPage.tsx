@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Activity, History, KeyRound, MapPin, Tags } from 'lucide-react';
+import { Activity, History, KeyRound, MapPin, Tags, UserX } from 'lucide-react';
 import { ApiError, apiRequest } from '@/api/client';
 import { getSettings, patchSettings } from '@/api/settings';
 import { DenConnection } from '@/components/DenConnection';
@@ -58,6 +58,14 @@ export function SettingsPage() {
               icon={History}
               title="Audit log"
               description="Who changed what, when"
+            />
+          ) : null}
+          {can(PERMS.userManage) ? (
+            <AdminLink
+              to="/users"
+              icon={UserX}
+              title="People"
+              description="Anonymise people who have left"
             />
           ) : null}
         </div>

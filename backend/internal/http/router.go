@@ -33,6 +33,10 @@ type Deps struct {
 	Access *auth.AccessConfig
 	// Den is the pairing with Den; nil means a fresh standalone client.
 	Den *denlink.Client
+	// Telegram is the Lost & Found bot; nil means no bot.
+	Telegram *service.LostFoundTelegram
+	// Overdue lists overdue sign-outs; nil builds one that sends no email.
+	Overdue *service.OverdueService
 }
 
 // NewRouter wires the chi router with middleware, CORS and routes.
@@ -75,13 +79,23 @@ func NewRouter(deps Deps, version string) http.Handler {
 	locs := &locationHandler{svc: service.NewLocationService(deps.Pool)}
 	items := &itemHandler{svc: service.NewItemService(deps.Pool), files: deps.Files}
 	signouts := &signoutHandler{svc: service.NewSignoutService(deps.Pool)}
-	lostfound := &lostFoundHandler{svc: service.NewLostFoundService(deps.Pool)}
 	fileH := &fileHandler{svc: deps.Files}
 	den := deps.Den
 	if den == nil {
 		den = denlink.New(deps.Pool, denlink.Config{Slug: "stash", Version: version, Mode: deps.Config.DenMode}, deps.Logger)
 	}
-	settings := &settingsHandler{svc: service.NewSettingsService(deps.Pool).WithDen(service.DenSource(den))}
+	settingsSvc := service.NewSettingsService(deps.Pool).WithDen(service.DenSource(den))
+	settings := &settingsHandler{svc: settingsSvc}
+	bot := deps.Telegram
+	if bot == nil {
+		bot = service.NewLostFoundTelegram(deps.Pool, settingsSvc, nil, deps.Logger)
+	}
+	overdue := deps.Overdue
+	if overdue == nil {
+		overdue = service.NewOverdueService(deps.Pool, settingsSvc, nil, "", "", deps.Logger)
+	}
+	lostfound := &lostFoundHandler{svc: service.NewLostFoundService(deps.Pool), telegram: &telegramHandler{bot: bot}}
+	users := &usersHandler{svc: service.NewUserService(deps.Pool)}
 
 	publicLF := &publicLostFoundHandler{pool: deps.Pool}
 
@@ -148,6 +162,8 @@ func NewRouter(deps Deps, version string) http.Handler {
 			secure.Route("/signouts", signouts.routes)
 			secure.Route("/lostfound", lostfound.routes)
 			secure.Get("/dashboard", dashboardHandler(deps.Pool))
+			secure.Get("/notifications", notificationsHandler(overdue))
+			secure.Route("/users", users.routes)
 			// /settings: anyone authenticated can read; only admins can patch.
 			// Split here so read and patch can use different middleware (chi Route
 			// would apply one middleware block to all verbs on that sub-router).

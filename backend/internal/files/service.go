@@ -342,6 +342,14 @@ func (s *Service) SetItemPrimaryImage(ctx context.Context, itemID uuid.UUID, fil
 	})
 }
 
+// RemoveEntityObject deletes a stored object after its row was deleted
+// elsewhere (the retention job), but only from the entity's own folder.
+func (s *Service) RemoveEntityObject(ctx context.Context, key, entityType string, entityID uuid.UUID) {
+	if KeyBelongsTo(key, entityType, entityID) {
+		_ = s.client.Remove(ctx, key)
+	}
+}
+
 type ListFilesInput struct {
 	EntityType string
 	EntityID   uuid.UUID

@@ -54,6 +54,17 @@ type Config struct {
 	// is paired with Den; standalone (the default) does not.
 	DenMode denlink.Mode
 
+	// TelegramBotToken is the Lost & Found bot's token (a secret). Empty
+	// means no Telegram, whatever the setting says.
+	TelegramBotToken string
+	// TelegramAPIURL is the Bot API server (tests point it elsewhere).
+	TelegramAPIURL string
+	// SMTPPassword logs in to the SMTP server from the settings (a secret).
+	SMTPPassword string
+	// JobsEnabled runs background jobs (retention, reminders, Telegram) on
+	// the replica that wins the leader lock. Off only for debugging.
+	JobsEnabled bool
+
 	CORSAllowedOrigins []string
 	// TrustedProxyCIDRs lists the proxies whose X-Forwarded-For entries are
 	// believed when working out the client IP (TRUSTED_PROXY_CIDRS).
@@ -85,6 +96,10 @@ func Load() (*Config, error) {
 		PublicLostFoundClaimEnabled: getEnvBool("PUBLIC_LOSTFOUND_CLAIM_ENABLED", false),
 		DenInternalURL:              getEnv("DEN_INTERNAL_URL", ""),
 		DenMode:                     denlink.Mode(getEnv("DEN_MODE", string(denlink.ModeStandalone))),
+		TelegramBotToken:            strings.TrimSpace(getEnv("TELEGRAM_BOT_TOKEN", "")),
+		TelegramAPIURL:              getEnv("TELEGRAM_API_URL", "https://api.telegram.org"),
+		SMTPPassword:                getEnv("SMTP_PASSWORD", ""),
+		JobsEnabled:                 getEnvBool("JOBS_ENABLED", true),
 		CORSAllowedOrigins:          splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
 		ShutdownTimeout:             getEnvDuration("SHUTDOWN_TIMEOUT", 15*time.Second),
 	}

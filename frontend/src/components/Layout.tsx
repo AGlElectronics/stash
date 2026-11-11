@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { isOidcAuthMode, signOutKeycloak } from '@/auth/oidc';
 import { DenConnection } from '@/components/DenConnection';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { OverdueNotice } from '@/components/OverdueNotice';
 import { ScanDialog } from '@/components/ScanDialog';
 import { isDenPairingRequired, useDenState } from '@/hooks/useDenState';
 import { useMe, PERMS } from '@/hooks/useMe';
@@ -256,6 +257,7 @@ export function Layout() {
 
   const footer = (
     <div className="mt-auto p-2 border-t border-border space-y-0.5">
+      {can(PERMS.signoutView) ? <OverdueNotice /> : null}
       <ThemeToggle className="rounded-pill" />
       {isOidcAuthMode() ? (
         <button

@@ -1,11 +1,7 @@
 import { apiRequest } from './client';
 import type { Paginated } from '@/types';
 
-/**
- * Lost & Found API contract. The backend implements these endpoints after the
- * frontend lands — see docs/backend-plan-frontend-redesign.md. Until then the
- * pages render their graceful empty/error states.
- */
+/** Lost & Found API (`/api/lostfound`). */
 
 export type LostFoundType = 'lost' | 'found';
 
@@ -40,9 +36,23 @@ export type LostFoundReport = {
   resolved_by_name?: string;
   resolved_at?: string;
   resolution_note?: string;
+  /** The guest linked this report on Telegram (the chat id stays on the server). */
+  telegram_linked?: boolean;
   created_at: string;
   updated_at: string;
 };
+
+export type TelegramStatus = {
+  enabled: boolean;
+  configured: boolean;
+  bot_username?: string;
+};
+
+export const getTelegramStatus = () => apiRequest<TelegramStatus>('/api/lostfound/telegram');
+
+/** Message the guest on Telegram; an empty message sends the default text. */
+export const notifyLostFoundGuest = (id: string, message: string) =>
+  apiRequest<{ sent: boolean }>(`/api/lostfound/${id}/notify`, { method: 'POST', body: { message } });
 
 export type ListLostFoundParams = {
   q?: string;

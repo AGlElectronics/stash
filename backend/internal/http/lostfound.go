@@ -14,7 +14,8 @@ import (
 )
 
 type lostFoundHandler struct {
-	svc *service.LostFoundService
+	svc      *service.LostFoundService
+	telegram *telegramHandler
 }
 
 type lostFoundDTO struct {
@@ -34,8 +35,11 @@ type lostFoundDTO struct {
 	ResolvedByUserID *string `json:"resolved_by_user_id,omitempty"`
 	ResolvedAt       string  `json:"resolved_at,omitempty"`
 	ResolutionNote   string  `json:"resolution_note"`
-	CreatedAt        string  `json:"created_at"`
-	UpdatedAt        string  `json:"updated_at"`
+	// TelegramLinked is true once the guest linked the report on Telegram.
+	// The chat id itself never leaves the backend.
+	TelegramLinked bool   `json:"telegram_linked"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 func toLostFoundDTO(r sqlcgen.LostFoundReport) lostFoundDTO {
@@ -56,6 +60,7 @@ func toLostFoundDTO(r sqlcgen.LostFoundReport) lostFoundDTO {
 		ResolvedByUserID: uuidToStrPtr(r.ResolvedByUserID),
 		ResolvedAt:       timestampString(r.ResolvedAt),
 		ResolutionNote:   r.ResolutionNote,
+		TelegramLinked:   r.TelegramChatID != nil,
 		CreatedAt:        timestampString(r.CreatedAt),
 		UpdatedAt:        timestampString(r.UpdatedAt),
 	}
@@ -68,6 +73,7 @@ func (h *lostFoundHandler) routes(r chi.Router) {
 	r.Group(func(g chi.Router) {
 		g.Use(require(domain.PermLostfoundView))
 		g.Get("/", h.list)
+		g.Get("/telegram", h.telegram.status)
 		g.Get("/by-number/{reportNumber}", h.getByReportNumber)
 		g.Get("/{id}", h.get)
 		g.Patch("/{id}", h.update)
@@ -80,6 +86,7 @@ func (h *lostFoundHandler) routes(r chi.Router) {
 		g.Use(require(domain.PermLostfoundDelete))
 		g.Delete("/{id}", h.delete)
 	})
+	r.With(require(domain.PermLostfoundNotify)).Post("/{id}/notify", h.telegram.notify)
 }
 
 func (h *lostFoundHandler) list(w http.ResponseWriter, r *http.Request) {

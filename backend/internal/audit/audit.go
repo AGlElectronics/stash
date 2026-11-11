@@ -35,7 +35,20 @@ func Record(
 	if err != nil {
 		return fmt.Errorf("marshal audit after: %w", err)
 	}
+	return RecordRaw(ctx, q, action, entityType, entityID, beforeJSON, afterJSON, note)
+}
 
+// RecordRaw is Record with snapshots that are already JSON (or nil). Jobs
+// that run without a signed-in user are recorded with no actor.
+func RecordRaw(
+	ctx context.Context,
+	q *sqlcgen.Queries,
+	action string,
+	entityType string,
+	entityID uuid.UUID,
+	beforeJSON, afterJSON []byte,
+	note string,
+) error {
 	snap := auth.ActorSnapshotFromContext(ctx)
 	var actorSub, actorName *string
 	if snap.OIDCSubject != "" {
@@ -45,7 +58,7 @@ func Record(
 		actorName = &snap.DisplayName
 	}
 
-	_, err = q.InsertAuditLog(ctx, sqlcgen.InsertAuditLogParams{
+	_, err := q.InsertAuditLog(ctx, sqlcgen.InsertAuditLogParams{
 		ActorUserID:      snap.UserID,
 		ActorOidcSubject: actorSub,
 		ActorDisplayName: actorName,

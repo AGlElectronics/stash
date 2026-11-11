@@ -46,6 +46,36 @@ the same version. Rebuilds get no entry here.
   export (`export.items`, `export.signouts`, `export.lostfound`). Its
   entity filter now offers `lostfound`, `file`, `settings`, `den` and
   `export`.
+- Lost & Found retention: once an hour Stash deletes reports, their photos
+  and their Telegram link when retention has passed, either
+  `lostfound_retention_hours` (default 720) after a report was returned,
+  closed or removed, or `lostfound_retention_days` (default 30) after
+  `con_end_date` for every report. Earlier audit entries about a deleted
+  report keep the action but lose the guest's data; the deletion is
+  audited as `lostfound.purge`.
+- People (`/users`, `GET /api/users`, `POST /api/users/{id}/anonymise`,
+  permission `user.manage`): anonymise someone who left. Their name, email
+  and IdP subject disappear from Stash, the audit log and item history
+  (shown as "Former user"). With `user_inactive_days` set, people who have
+  not signed in for that long are anonymised automatically.
+- Lost & Found Telegram bot (Stash's own): set `TELEGRAM_BOT_TOKEN` and
+  turn it on in Settings. A guest sends `/start LF0042` (or the report
+  number) to link the report, `/stop` to unlink. On a linked report,
+  people with the new `lostfound.notify` permission (`frontdesk`,
+  `conops_lead`, `admin`) can press **Notify guest**
+  (`POST /api/lostfound/{id}/notify`). Every link, unlink and message is
+  audited; the chat id never appears in the API or the audit log, and it
+  is deleted with the report. `GET /api/lostfound/telegram` reports
+  whether the bot is on and its @username.
+- Overdue returns: the sidebar shows overdue sign-outs
+  (`GET /api/notifications`), and with `overdue_email_enabled` Stash emails
+  the receiver and the `overdue_notify_emails` list at most once a day
+  per sign-out (audited as `signout.overdue_reminder`). The SMTP server
+  comes from Settings or Den; the password is the new `SMTP_PASSWORD`
+  secret.
+- Background jobs run on exactly one replica, elected with a PostgreSQL
+  advisory lock; another replica takes over within 30 seconds.
+  `JOBS_ENABLED=false` turns them off on a replica.
 - Settings: protecting report LF-0001 from edits and removal is an easter
   egg that stays off unless an admin turns it on.
 - Dev sign-in (`AUTH_MODE=dev`) can use roles other than admin:

@@ -9,7 +9,7 @@
 # Admin:        department.manage  location.manage  category.manage
 #               user.manage  access.manage  audit.view  export.create  file.upload
 # Lost & Found: lostfound.view  lostfound.create  lostfound.edit  lostfound.resolve
-#               lostfound.reopen  lostfound.delete
+#               lostfound.reopen  lostfound.delete  lostfound.notify
 #
 # Roles below replace built-in defaults when listed. Omit a role to keep the
 # code default. Every role is global: it applies to every department's gear.
@@ -55,6 +55,7 @@ permissions = [
   "lostfound.resolve",
   "lostfound.reopen",
   "lostfound.delete",
+  "lostfound.notify",
 ]
 
 # Logistics / inventory team — items, sign-outs, locations, no L&F.
@@ -127,6 +128,7 @@ permissions = [
   "lostfound.view",
   "lostfound.create",
   "lostfound.resolve",
+  "lostfound.notify",
   "file.upload",
 ]
 
@@ -140,6 +142,7 @@ permissions = [
   "lostfound.resolve",
   "lostfound.reopen",
   "lostfound.delete",
+  "lostfound.notify",
   "audit.view",
   "export.create",
   "file.upload",

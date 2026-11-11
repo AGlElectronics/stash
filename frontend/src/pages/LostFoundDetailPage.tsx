@@ -21,6 +21,7 @@ import {
   type LostFoundReport,
 } from '@/api/lostfound';
 import { fetchFileBlobURL, listFiles } from '@/api/files';
+import { LostFoundTelegramPanel } from '@/components/LostFoundTelegramPanel';
 import { Badge } from '@/components/ui/Badge';
 import { Button, LinkButton } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -172,6 +173,8 @@ export function LostFoundDetailPage() {
             {r.resolved_by_name ? <Row label="Resolved by">{r.resolved_by_name}</Row> : null}
             {r.resolution_note ? <Row label="Note">{r.resolution_note}</Row> : null}
           </dl>
+
+          <LostFoundTelegramPanel report={r} />
 
           {(canResolve || canReopen || canEdit || canDelete) ? (
             <div className="flex flex-wrap gap-2 pt-2 border-t border-border">

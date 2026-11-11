@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -179,7 +180,7 @@ func (s *LostFoundService) Create(ctx context.Context, in CreateLostFoundInput) 
 			return mapPgError(err, "lostfound", "duplicate report number")
 		}
 		out = row
-		return audit.Record(ctx, qtx, "lostfound.create", "lostfound", row.ID, nil, row, "")
+		return audit.Record(ctx, qtx, "lostfound.create", "lostfound", row.ID, nil, reportForAudit(row), "")
 	})
 	return out, err
 }
@@ -324,7 +325,7 @@ func (s *LostFoundService) Update(ctx context.Context, id uuid.UUID, in UpdateLo
 			return mapPgError(err, "lostfound", "")
 		}
 		out = row
-		return audit.Record(ctx, qtx, action, "lostfound", id, before, row, "")
+		return audit.Record(ctx, qtx, action, "lostfound", id, reportForAudit(before), reportForAudit(row), "")
 	})
 	return out, err
 }
@@ -355,8 +356,23 @@ func (s *LostFoundService) Delete(ctx context.Context, id uuid.UUID) error {
 			}
 			return httperror.Internal(err)
 		}
-		return audit.Record(ctx, qtx, "lostfound.remove", "lostfound", id, before, row, "")
+		return audit.Record(ctx, qtx, "lostfound.remove", "lostfound", id, reportForAudit(before), reportForAudit(row), "")
 	})
+}
+
+// reportForAudit is the report as written to the audit log: the guest's
+// Telegram chat id is left out.
+func reportForAudit(r sqlcgen.LostFoundReport) sqlcgen.LostFoundReport {
+	r.TelegramChatID = nil
+	return r
+}
+
+func mustJSON(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 // validateLostFoundPhoto checks that a referenced photo file exists, is an

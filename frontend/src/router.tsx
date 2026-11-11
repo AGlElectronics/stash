@@ -27,6 +27,7 @@ import { LostFoundListPage } from '@/pages/LostFoundListPage';
 import { LostFoundNewPage } from '@/pages/LostFoundNewPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { UsersPage } from '@/pages/UsersPage';
 import { SignoutDetailPage } from '@/pages/SignoutDetailPage';
 import { SignoutNewPage } from '@/pages/SignoutNewPage';
 import { SignoutsListPage } from '@/pages/SignoutsListPage';
@@ -253,6 +254,12 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const usersRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/users',
+  component: UsersPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
   oidcCallbackRoute,
@@ -281,6 +288,7 @@ const routeTree = rootRoute.addChildren([
     categoriesRoute,
     auditLogRoute,
     settingsRoute,
+    usersRoute,
   ]),
 ]);
 

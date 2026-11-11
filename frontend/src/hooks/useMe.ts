@@ -46,4 +46,5 @@ export const PERMS = {
   lostfoundResolve: 'lostfound.resolve',
   lostfoundReopen: 'lostfound.reopen',
   lostfoundDelete: 'lostfound.delete',
+  lostfoundNotify: 'lostfound.notify',
 } as const;

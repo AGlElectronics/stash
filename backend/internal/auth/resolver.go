@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/AGlElectronics/stash/backend/internal/domain"
+	"github.com/AGlElectronics/stash/backend/internal/groupmatch"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
 	"github.com/AGlElectronics/stash/backend/internal/repository/sqlcgen"
 )
@@ -20,10 +21,12 @@ import (
 type Resolver struct {
 	pool   *pgxpool.Pool
 	access *AccessConfig
+	groups groupmatch.Config
 }
 
-func NewResolver(pool *pgxpool.Pool, access *AccessConfig) *Resolver {
-	return &Resolver{pool: pool, access: access}
+// NewResolver returns a Resolver; token groups are matched to roles with gm.
+func NewResolver(pool *pgxpool.Pool, access *AccessConfig, gm groupmatch.Config) *Resolver {
+	return &Resolver{pool: pool, access: access, groups: gm}
 }
 
 // ParseDevUser splits a dev-mode user value of the form "name" or
@@ -95,9 +98,7 @@ func (r *Resolver) LoadOrProvisionOIDCUser(ctx context.Context, claims *OIDCClai
 		return nil, fmt.Errorf("upsert user: %w", err)
 	}
 
-	// Merge both groups and roles claims so the config file can bind on either.
-	combined := append(append([]string{}, claims.Groups...), claims.Roles...)
-	return r.buildUser(row, r.access.RolesForGroups(combined)), nil
+	return r.buildUser(row, r.access.RolesForGroups(r.groups, claims.Groups)), nil
 }
 
 // buildUser assembles the request principal from the identity row and the

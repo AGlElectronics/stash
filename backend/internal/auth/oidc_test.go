@@ -1,0 +1,144 @@
+package auth
+
+import (
+	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/AGlElectronics/stash/backend/internal/config"
+	"github.com/AGlElectronics/stash/backend/internal/groupmatch"
+)
+
+// fakeIssuer is an OpenID provider with discovery and a JWKS that signs
+// test tokens with its own RSA key.
+type fakeIssuer struct {
+	srv *httptest.Server
+	key *rsa.PrivateKey
+}
+
+func newFakeIssuer(t *testing.T) *fakeIssuer {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeIssuer{key: key}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/.well-known/openid-configuration", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"issuer":                                f.srv.URL,
+			"jwks_uri":                              f.srv.URL + "/jwks",
+			"authorization_endpoint":                f.srv.URL + "/auth",
+			"token_endpoint":                        f.srv.URL + "/token",
+			"id_token_signing_alg_values_supported": []string{"RS256"},
+		})
+	})
+	mux.HandleFunc("/jwks", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"keys": []map[string]string{{
+			"kty": "RSA", "alg": "RS256", "use": "sig", "kid": "test",
+			"n": b64(key.N.Bytes()), "e": b64(big.NewInt(int64(key.E)).Bytes()),
+		}}})
+	})
+	f.srv = httptest.NewServer(mux)
+	t.Cleanup(f.srv.Close)
+	return f
+}
+
+func b64(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
+
+// token signs claims (iss defaults to the issuer, exp to an hour ahead).
+func (f *fakeIssuer) token(t *testing.T, claims map[string]any) string {
+	t.Helper()
+	if _, ok := claims["iss"]; !ok {
+		claims["iss"] = f.srv.URL
+	}
+	if _, ok := claims["exp"]; !ok {
+		claims["exp"] = time.Now().Add(time.Hour).Unix()
+	}
+	header, _ := json.Marshal(map[string]string{"alg": "RS256", "typ": "JWT", "kid": "test"})
+	payload, _ := json.Marshal(claims)
+	signing := b64(header) + "." + b64(payload)
+	sum := sha256.Sum256([]byte(signing))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, f.key, crypto.SHA256, sum[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signing + "." + b64(sig)
+}
+
+func TestOIDCVerify(t *testing.T) {
+	f := newFakeIssuer(t)
+	ctx := context.Background()
+	// No OIDC_AUDIENCE: access tokens must carry the default stash-api.
+	v, err := NewOIDCVerifier(ctx, &config.Config{OIDCIssuerURL: f.srv.URL, OIDCClientID: "stash-spa"})
+	if err != nil {
+		t.Fatalf("verifier: %v", err)
+	}
+
+	claims, err := v.Verify(ctx, f.token(t, map[string]any{
+		"sub": "kc-123", "aud": []string{"stash-api", "account"}, "typ": "Bearer", "azp": "stash-spa",
+		"email": "sam@example.org", "nickname": "Sam",
+		"groups": []string{"/stash_volunteer", "stash-conops"}, "roles": []string{"stash_admin", "offline_access"},
+	}))
+	if err != nil {
+		t.Fatalf("verify: %v", err)
+	}
+	if claims.Subject != "kc-123" || claims.Email != "sam@example.org" {
+		t.Fatalf("claims = %+v", claims)
+	}
+	// Groups come only from OIDC_GROUPS_CLAIM; "roles" is never merged in.
+	if strings.Join(claims.Groups, ",") != "/stash_volunteer,stash-conops" {
+		t.Fatalf("groups = %v", claims.Groups)
+	}
+
+	bad := map[string]map[string]any{
+		"ID token (audience is the client)": {"sub": "kc-1", "aud": "stash-spa", "typ": "ID"},
+		"ID token with the API audience":    {"sub": "kc-1", "aud": "stash-api", "typ": "ID"},
+		"token without typ":                 {"sub": "kc-1", "aud": "stash-api"},
+		"another API's token":               {"sub": "kc-1", "aud": "hr-api", "typ": "Bearer"},
+		"expired":                           {"sub": "kc-1", "aud": "stash-api", "typ": "Bearer", "exp": time.Now().Add(-time.Hour).Unix()},
+		"another issuer":                    {"sub": "kc-1", "aud": "stash-api", "typ": "Bearer", "iss": "https://evil.example.org"},
+		"missing subject":                   {"aud": "stash-api", "typ": "Bearer"},
+	}
+	for name, c := range bad {
+		if _, err := v.Verify(ctx, f.token(t, c)); err == nil {
+			t.Errorf("%s: token accepted", name)
+		}
+	}
+	tampered := f.token(t, map[string]any{"sub": "kc-1", "aud": "stash-api", "typ": "Bearer"})
+	parts := strings.Split(tampered, ".")
+	parts[1] = b64([]byte(`{"sub":"admin","aud":"stash-api","typ":"Bearer","iss":"` + f.srv.URL + `","exp":9999999999}`))
+	if _, err := v.Verify(ctx, strings.Join(parts, ".")); err == nil {
+		t.Error("a token with a changed payload was accepted")
+	}
+	if _, err := v.Verify(ctx, "  "); err == nil {
+		t.Error("an empty bearer was accepted")
+	}
+
+	// OIDC_AUDIENCE and OIDC_GROUPS_CLAIM are configurable.
+	gm := groupmatch.Config{Claim: "realm_access.roles"}
+	va, err := NewOIDCVerifier(ctx, &config.Config{OIDCIssuerURL: f.srv.URL, OIDCClientID: "stash-spa", OIDCAudience: "stash-internal", GroupMatch: gm})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := va.Verify(ctx, f.token(t, map[string]any{
+		"sub": "kc-1", "aud": "stash-internal", "typ": "Bearer", "groups": []string{"ignored"},
+		"realm_access": map[string]any{"roles": []string{"stash_admin"}},
+	}))
+	if err != nil || strings.Join(c2.Groups, ",") != "stash_admin" {
+		t.Errorf("custom claim: groups %v, err %v", c2, err)
+	}
+	if _, err := NewOIDCVerifier(ctx, &config.Config{}); err == nil {
+		t.Error("a verifier without issuer and client id must fail")
+	}
+}

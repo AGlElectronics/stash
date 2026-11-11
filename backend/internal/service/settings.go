@@ -18,6 +18,7 @@ import (
 
 	"github.com/AGlElectronics/stash/backend/internal/audit"
 	"github.com/AGlElectronics/stash/backend/internal/db"
+	"github.com/AGlElectronics/stash/backend/internal/denlink"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
 	"github.com/AGlElectronics/stash/backend/internal/repository/sqlcgen"
 )
@@ -40,7 +41,7 @@ const (
 //
 // Adding a setting? Add a field with a JSON tag, a default in
 // withDefaults, a validator in settingValidators and, if Den may manage
-// it, an entry in denKeys. No migration is needed: the column is JSONB.
+// it, a mapping in denValues. No migration is needed: the column is JSONB.
 type SystemSettings struct {
 	// ForceBarcodeOnSignout requires a barcode scan for every sign-out line.
 	ForceBarcodeOnSignout bool `json:"force_barcode_on_signout"`
@@ -118,30 +119,73 @@ func (s SystemSettings) withDefaults() SystemSettings {
 	return s
 }
 
-// SettingsSource supplies values from Den when Stash is paired. Den's
-// organisation settings carry Stash's keys with a stash_ prefix
-// (stash_lostfound_retention_mode, stash_smtp_host, ...), next to the
-// shared organization_name.
+// SettingsSource supplies values from Den when Stash is paired: the
+// organisation name and Den's module settings for Stash
+// (docs/concepts/module-settings.md).
 type SettingsSource interface {
 	Paired() bool
 	OrganizationName() string
-	// DenSettings is Den's organisation settings document (nil when
-	// standalone).
-	DenSettings() map[string]any
+	// ModuleSettings is Den's module_settings from the last bundle (nil
+	// when standalone or when Den sends none).
+	ModuleSettings() *denlink.ModuleSettings
 }
 
-// denKeys are the Stash settings Den may manage, mapped to the key in
-// Den's organisation settings.
-var denKeys = map[string]string{
-	"con_end_date":              "stash_con_end_date",
-	"lostfound_retention_mode":  "stash_lostfound_retention_mode",
-	"lostfound_retention_days":  "stash_lostfound_retention_days",
-	"lostfound_retention_hours": "stash_lostfound_retention_hours",
-	"smtp_host":                 "stash_smtp_host",
-	"smtp_port":                 "stash_smtp_port",
-	"smtp_username":             "stash_smtp_username",
-	"smtp_from":                 "stash_smtp_from",
-	"smtp_tls":                  "stash_smtp_tls",
+// Den's Lost & Found modes (stash.lost_found.mode) and the contract's
+// defaults when Den sets a mode without its count.
+const (
+	denLostFoundKeptAfterCon        = "kept_after_con"
+	denLostFoundDeletedAfterClosing = "deleted_after_closing"
+	denLostFoundDefaultDays         = 30
+	denLostFoundDefaultHours        = 48
+)
+
+// denValues maps Den's module settings to Stash's setting keys:
+//
+//	stash.lost_found                    lostfound_retention_mode/_days/_hours
+//	retention.inactive_users_days       user_inactive_days
+//	smtp.host/port/username/security    smtp_host/_port/_username/_tls
+//	smtp.from, smtp.from_name           smtp_from ("Name <address>")
+//
+// Keys Den does not set are left out; Stash then uses its own value.
+func denValues(ms *denlink.ModuleSettings) map[string]any {
+	out := map[string]any{}
+	var lf struct {
+		Mode  string `json:"mode"`
+		Days  *int   `json:"days"`
+		Hours *int   `json:"hours"`
+	}
+	if ok, err := ms.Decode("stash.lost_found", &lf); ok && err == nil {
+		switch lf.Mode {
+		case denLostFoundKeptAfterCon:
+			out["lostfound_retention_mode"] = RetentionAfterCon
+			out["lostfound_retention_days"] = intOr(lf.Days, denLostFoundDefaultDays)
+		case denLostFoundDeletedAfterClosing:
+			out["lostfound_retention_mode"] = RetentionAfterClose
+			out["lostfound_retention_hours"] = intOr(lf.Hours, denLostFoundDefaultHours)
+		}
+	}
+	if d := ms.Retention().InactiveUsersDays; d != nil {
+		out["user_inactive_days"] = *d
+	}
+	if s, ok := ms.SMTP(); ok {
+		out["smtp_host"] = s.Host
+		out["smtp_port"] = s.Port
+		out["smtp_username"] = s.Username
+		out["smtp_tls"] = s.Security
+		from := s.From
+		if s.FromName != "" && s.From != "" {
+			from = (&mail.Address{Name: s.FromName, Address: s.From}).String()
+		}
+		out["smtp_from"] = from
+	}
+	return out
+}
+
+func intOr(p *int, def int) int {
+	if p == nil {
+		return def
+	}
+	return *p
 }
 
 type SettingsService struct {
@@ -175,16 +219,12 @@ func (s *SettingsService) Get(ctx context.Context) (SystemSettings, error) {
 	}
 	out.OrganizationName = s.den.OrganizationName()
 	managed := []string{"organization_name"}
-	if data := s.den.DenSettings(); len(data) > 0 {
+	if values := denValues(s.den.ModuleSettings()); len(values) > 0 {
 		m, err := toMap(out)
 		if err != nil {
 			return out, httperror.Internal(err)
 		}
-		for key, denKey := range denKeys {
-			raw, ok := data[denKey]
-			if !ok || raw == nil {
-				continue
-			}
+		for key, raw := range values {
 			v, err := settingValidators[key](raw)
 			if err != nil {
 				// A bad value in Den must not break Stash; keep ours.
@@ -441,7 +481,7 @@ func (s *SettingsService) PatchJSON(ctx context.Context, patch json.RawMessage) 
 			continue
 		}
 		if slices.Contains(managed, k) {
-			problems[k] = "managed in Den (Admin → Organisation)"
+			problems[k] = "managed in Den (Admin → Module settings)"
 			continue
 		}
 		nv, err := validate(v)

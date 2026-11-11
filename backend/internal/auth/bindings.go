@@ -4,22 +4,25 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/AGlElectronics/stash/backend/internal/groupmatch"
 )
 
-// GroupBinding maps an OIDC group claim to a Stash role. Bindings live in
-// the access config file mounted into the backend pod (see accessconfig.go)
-// and are always global.
+// GroupBinding maps an OIDC group to a Stash role. Bindings live in the
+// access config file mounted into the backend pod (see accessconfig.go) and
+// are always global.
 type GroupBinding struct {
-	OIDCGroup string
-	RoleName  string
+	// Group is the group as written in the file (Display) and normalised
+	// (Stored, used for uniqueness). Matching uses groupmatch.
+	Group    groupmatch.Grant
+	RoleName string
 }
 
 // GroupBindings is an immutable snapshot of the OIDC group → role mapping
 // loaded once at startup from the access config file. It is safe to read
-// concurrently: the maps are never mutated after construction.
+// concurrently: nothing is mutated after construction.
 type GroupBindings struct {
-	byGroup map[string][]GroupBinding
-	all     []GroupBinding
+	all []GroupBinding
 }
 
 // Empty reports whether the snapshot contains no bindings.
@@ -37,21 +40,16 @@ func (gb *GroupBindings) All() []GroupBinding {
 	return out
 }
 
-// Lookup returns every binding that matches any of the supplied groups,
-// deduplicated by (group, role). Groups are compared exactly.
-func (gb *GroupBindings) Lookup(groups []string) []GroupBinding {
+// Lookup returns every binding whose group matches one of the token's
+// groups under the shared rule (groupmatch: case, one leading "/",
+// OIDC_GROUP_PREFIX and OIDC_GROUP_MATCH).
+func (gb *GroupBindings) Lookup(gm groupmatch.Config, groups []string) []GroupBinding {
 	if gb == nil || len(groups) == 0 {
 		return nil
 	}
-	seen := map[string]struct{}{}
-	out := []GroupBinding{}
-	for _, g := range groups {
-		for _, b := range gb.byGroup[g] {
-			key := b.OIDCGroup + "\x00" + b.RoleName
-			if _, ok := seen[key]; ok {
-				continue
-			}
-			seen[key] = struct{}{}
+	var out []GroupBinding
+	for _, b := range gb.all {
+		if gm.Match(groups, b.Group.Stored) {
 			out = append(out, b)
 		}
 	}
@@ -59,8 +57,8 @@ func (gb *GroupBindings) Lookup(groups []string) []GroupBinding {
 }
 
 type bindingFileEntry struct {
-	// Group is the OIDC group name (e.g. "stash-admin"); it must match the
-	// claim coming from the IdP exactly.
+	// Group is the OIDC group name (e.g. "stash-admin"), compared with the
+	// token's groups by the shared rule (groupmatch).
 	Group string `toml:"group"`
 	// Role is the Stash role name (e.g. "admin", "frontdesk").
 	Role string `toml:"role"`
@@ -80,9 +78,10 @@ func parseGroupBindings(data []byte) (*GroupBindings, error) {
 }
 
 // buildGroupBindings validates and indexes the binding entries of the access
-// config file.
+// config file. Two entries whose groups normalise to the same name and that
+// name the same role are duplicates.
 func buildGroupBindings(entries []bindingFileEntry) (*GroupBindings, error) {
-	out := &GroupBindings{byGroup: map[string][]GroupBinding{}}
+	out := &GroupBindings{}
 	seen := map[string]struct{}{}
 	for i, e := range entries {
 		group := strings.TrimSpace(e.Group)
@@ -96,20 +95,18 @@ func buildGroupBindings(entries []bindingFileEntry) (*GroupBindings, error) {
 		if strings.TrimSpace(e.DepartmentID) != "" {
 			return nil, fmt.Errorf("binding[%d] (group=%q): department_id is not supported; roles are global, remove the line", i, group)
 		}
-		b := GroupBinding{OIDCGroup: group, RoleName: role}
-		key := b.OIDCGroup + "\x00" + b.RoleName
+		b := GroupBinding{Group: groupmatch.NewGrant(group), RoleName: role}
+		key := b.Group.Stored + "\x00" + b.RoleName
 		if _, dup := seen[key]; dup {
 			return nil, fmt.Errorf("binding[%d]: duplicate (group=%q, role=%q)", i, group, role)
 		}
 		seen[key] = struct{}{}
-
-		out.byGroup[group] = append(out.byGroup[group], b)
 		out.all = append(out.all, b)
 	}
 
 	sort.Slice(out.all, func(i, j int) bool {
-		if out.all[i].OIDCGroup != out.all[j].OIDCGroup {
-			return out.all[i].OIDCGroup < out.all[j].OIDCGroup
+		if out.all[i].Group.Stored != out.all[j].Group.Stored {
+			return out.all[i].Group.Stored < out.all[j].Group.Stored
 		}
 		return out.all[i].RoleName < out.all[j].RoleName
 	})

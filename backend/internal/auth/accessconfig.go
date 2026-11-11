@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/AGlElectronics/stash/backend/internal/domain"
+	"github.com/AGlElectronics/stash/backend/internal/groupmatch"
 )
 
 // AccessConfig is the in-memory snapshot of the access config file — the
@@ -51,7 +51,7 @@ var defaultRoleDescriptions = map[string]string{
 // bindings. Used in dev mode when no access config file is configured.
 func DefaultAccessConfig() *AccessConfig {
 	return &AccessConfig{
-		Bindings:  &GroupBindings{byGroup: map[string][]GroupBinding{}},
+		Bindings:  &GroupBindings{},
 		rolePerms: defaultRolePermSets(),
 	}
 }
@@ -65,18 +65,20 @@ func RoleKey(role string) string { return RoleKeyPrefix + role }
 
 // RolesForGroups returns the sorted role names granted by the token's
 // groups. A group grants a role when a binding maps it to the role, or when
-// the group is named exactly like the role's catalog key (stash_volunteer
-// grants volunteer).
-func (c *AccessConfig) RolesForGroups(groups []string) []string {
-	if c == nil {
+// it is the role's global group stash_<role> (stash_volunteer grants
+// volunteer). Both compare with the shared rule (groupmatch), so
+// /Stash_Volunteer or, with OIDC_GROUP_PREFIX=/con2026,
+// /con2026/stash_volunteer count too.
+func (c *AccessConfig) RolesForGroups(gm groupmatch.Config, groups []string) []string {
+	if c == nil || len(groups) == 0 {
 		return nil
 	}
 	set := map[string]struct{}{}
-	for _, b := range c.Bindings.Lookup(groups) {
+	for _, b := range c.Bindings.Lookup(gm, groups) {
 		set[b.RoleName] = struct{}{}
 	}
-	for _, g := range groups {
-		if role, ok := strings.CutPrefix(g, RoleKeyPrefix); ok && c.HasRole(role) {
+	for role := range c.rolePerms {
+		if gm.Match(groups, RoleKey(role)) {
 			set[role] = struct{}{}
 		}
 	}
@@ -89,16 +91,17 @@ func (c *AccessConfig) RolesForGroups(groups []string) []string {
 }
 
 // GroupForRole returns the IdP group HR should add people to for a role:
-// the first group bound to it in the file, otherwise the role's key.
-func (c *AccessConfig) GroupForRole(role string) string {
+// the first group bound to it in the file, otherwise the role's global
+// group stash_<role>.
+func (c *AccessConfig) GroupForRole(role string) groupmatch.Grant {
 	if c != nil {
 		for _, b := range c.Bindings.All() {
 			if b.RoleName == role {
-				return b.OIDCGroup
+				return b.Group
 			}
 		}
 	}
-	return RoleKey(role)
+	return groupmatch.NewGrant(RoleKey(role))
 }
 
 // PermissionsForRole returns the permission set for a role, or nil when the
@@ -194,7 +197,7 @@ func parseAccessConfig(data []byte) (*AccessConfig, error) {
 	}
 	for _, b := range bindings.All() {
 		if _, ok := rolePerms[b.RoleName]; !ok {
-			return nil, fmt.Errorf("bindings: group %q references unknown role %q", b.OIDCGroup, b.RoleName)
+			return nil, fmt.Errorf("bindings: group %q references unknown role %q", b.Group.Display, b.RoleName)
 		}
 	}
 

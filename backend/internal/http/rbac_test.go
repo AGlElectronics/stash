@@ -84,20 +84,30 @@ func TestRoleCatalogPublishesGlobalPrefixedRoles(t *testing.T) {
 	rec := httptest.NewRecorder()
 	roleCatalogHandler(auth.DefaultAccessConfig())(rec, httptest.NewRequest(http.MethodGet, "/api/role-catalog", nil))
 	var body struct {
-		Roles []roleCatalogEntry `json:"roles"`
+		Revision string             `json:"revision"`
+		Roles    []roleCatalogEntry `json:"roles"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatal(err)
 	}
-	seen := map[string]bool{}
+	if body.Revision == "" || rec.Header().Get("ETag") != `"`+body.Revision+`"` {
+		t.Fatalf("revision %q, ETag %q", body.Revision, rec.Header().Get("ETag"))
+	}
+	seen := map[string]roleCatalogEntry{}
 	for _, r := range body.Roles {
-		if !strings.HasPrefix(r.Key, "stash_") || r.Scope != "global" || r.Group == "" || seen[r.Key] {
+		if !strings.HasPrefix(r.Key, "stash_") || r.Scope != "organization" || r.Group != r.Key || r.GroupDisplay != r.Key || r.Dynamic {
 			t.Errorf("bad catalog entry %+v", r)
 		}
-		seen[r.Key] = true
+		if _, dup := seen[r.Key]; dup {
+			t.Errorf("duplicate key %s", r.Key)
+		}
+		seen[r.Key] = r
 	}
-	if !seen["stash_admin"] || !seen["stash_dept_lead"] {
-		t.Fatalf("missing built-in roles: %v", seen)
+	for key, privileged := range map[string]bool{"stash_admin": true, "stash_inventory_manager": true, "stash_volunteer": false, "stash_frontdesk": false, "stash_readonly": false} {
+		r, ok := seen[key]
+		if !ok || r.Privileged != privileged {
+			t.Errorf("%s: present %v, privileged %v, want %v", key, ok, r.Privileged, privileged)
+		}
 	}
 }
 

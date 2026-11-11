@@ -1,13 +1,15 @@
 package http
 
 import (
-	"errors"
-	"io"
+	"encoding/json"
 	"net/http"
 
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
 	"github.com/AGlElectronics/stash/backend/internal/service"
 )
+
+// maxSettingsBody bounds PATCH /api/settings.
+const maxSettingsBody = 64 << 10
 
 type settingsHandler struct {
 	svc *service.SettingsService
@@ -27,15 +29,9 @@ func (h *settingsHandler) get(w http.ResponseWriter, r *http.Request) {
 // patch validates and merges a partial JSON object into system settings.
 // Gated by access.manage at the router level.
 func (h *settingsHandler) patch(w http.ResponseWriter, r *http.Request) {
-	defer func() { _ = r.Body.Close() }()
-	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
-	if err != nil {
-		var tooBig *http.MaxBytesError
-		if errors.As(err, &tooBig) {
-			httperror.Render(w, r, httperror.BadRequest("settings patch is larger than 64 KiB"))
-			return
-		}
-		httperror.Render(w, r, httperror.BadRequest("could not read body"))
+	var raw json.RawMessage
+	if err := decodeJSONLimit(r, &raw, maxSettingsBody); err != nil {
+		httperror.Render(w, r, err)
 		return
 	}
 	out, err := h.svc.PatchJSON(r.Context(), raw)

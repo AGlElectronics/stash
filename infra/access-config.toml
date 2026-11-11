@@ -18,10 +18,14 @@
 #
 # A person gets a role in two ways:
 #   1. a binding below maps one of their groups to the role, or
-#   2. they are in a group named exactly like the role's catalog key,
+#   2. they are in the role's global group, named like its catalog key
 #      stash_<role> (for example stash_volunteer), with no binding needed.
+# Groups come only from the token claim OIDC_GROUPS_CLAIM (default groups;
+# the roles claim is never read) and are compared with the shared rule:
+# case-insensitive, one leading "/" ignored, OIDC_GROUP_PREFIX removed, and
+# with OIDC_GROUP_MATCH=last only the last path segment counts.
 # GET /api/role-catalog publishes each role once as stash_<role>, with the
-# first group bound to it here (or the key itself) as the group HR assigns.
+# first group bound to it here (or stash_<role>) as the group HR assigns.
 
 # ── Roles ────────────────────────────────────────────────────────────────────
 
@@ -164,7 +168,7 @@ permissions = [
 ]
 
 # ── OIDC bindings ────────────────────────────────────────────────────────────
-# "group" must match the Keycloak client role name (groups or roles JWT claim).
+# "group" is a Keycloak group, matched against the groups claim as above.
 
 [[bindings]]
 group = "stash-admin"              # → admin

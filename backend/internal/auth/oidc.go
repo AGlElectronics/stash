@@ -9,26 +9,31 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 
 	"github.com/AGlElectronics/stash/backend/internal/config"
+	"github.com/AGlElectronics/stash/backend/internal/groupmatch"
 )
 
-// OIDCVerifier wraps the go-oidc verifier and exposes the subset of token
-// claims we use for authentication and group→role mapping.
+// OIDCVerifier checks the access tokens Stash's web app sends (token
+// contract, docs/concepts/authentication.md): signature, issuer, expiry and
+// an audience naming Stash's API (OIDC_AUDIENCE, default stash-api). ID
+// tokens are refused.
 type OIDCVerifier struct {
 	verifier *oidc.IDTokenVerifier
-	cfg      *config.Config
+	groups   groupmatch.Config
 }
 
-// OIDCClaims is the parsed shape we accept from the IdP. We try the standard
-// claim names first and fall back to the Keycloak-specific shapes used by
-// older realms.
+// OIDCClaims is the parsed claim subset Stash uses.
 type OIDCClaims struct {
-	Subject           string   `json:"sub"`
-	Email             string   `json:"email"`
-	PreferredUsername string   `json:"preferred_username"`
-	Name              string   `json:"name"`
-	Nickname          string   `json:"nickname"`
-	Groups            []string `json:"groups"`
-	Roles             []string `json:"roles"`
+	Subject           string `json:"sub"`
+	Email             string `json:"email"`
+	PreferredUsername string `json:"preferred_username"`
+	Name              string `json:"name"`
+	Nickname          string `json:"nickname"`
+	// Type is Keycloak's "typ" claim: "Bearer" for access tokens, "ID" for
+	// ID tokens.
+	Type string `json:"typ"`
+	// Groups come only from OIDC_GROUPS_CLAIM (groupmatch); "roles" is
+	// never merged in.
+	Groups []string `json:"-"`
 }
 
 // NewOIDCVerifier constructs the verifier from config. It performs OIDC
@@ -41,12 +46,10 @@ func NewOIDCVerifier(ctx context.Context, cfg *config.Config) (*OIDCVerifier, er
 	if err != nil {
 		return nil, fmt.Errorf("oidc discovery: %w", err)
 	}
-	audience := cfg.OIDCAudience
-	if audience == "" {
-		audience = cfg.OIDCClientID
-	}
-	v := provider.Verifier(&oidc.Config{ClientID: audience})
-	return &OIDCVerifier{verifier: v, cfg: cfg}, nil
+	return &OIDCVerifier{
+		verifier: provider.Verifier(&oidc.Config{ClientID: cfg.Audience()}),
+		groups:   cfg.GroupMatch,
+	}, nil
 }
 
 // Verify parses & validates a bearer token, returning the claims subset we
@@ -56,46 +59,24 @@ func (v *OIDCVerifier) Verify(ctx context.Context, bearer string) (*OIDCClaims, 
 	if bearer == "" {
 		return nil, errors.New("missing bearer token")
 	}
-	idToken, err := v.verifier.Verify(ctx, bearer)
+	token, err := v.verifier.Verify(ctx, bearer)
 	if err != nil {
 		return nil, fmt.Errorf("verify token: %w", err)
 	}
 	var c OIDCClaims
-	if err := idToken.Claims(&c); err != nil {
+	if err := token.Claims(&c); err != nil {
 		return nil, fmt.Errorf("parse claims: %w", err)
+	}
+	if !strings.EqualFold(c.Type, "Bearer") {
+		return nil, fmt.Errorf("token type %q: the API needs an access token", c.Type)
 	}
 	if c.Subject == "" {
 		return nil, errors.New("token missing sub claim")
 	}
-	// Many IdPs do not expose plain `groups`; allow either claim. We treat
-	// roles and groups as equivalent inputs for the binding mapper - admins
-	// can choose which to use.
-	c.Groups = mergeUnique(c.Groups, c.Roles)
+	var all map[string]any
+	if err := token.Claims(&all); err != nil {
+		return nil, fmt.Errorf("parse claims: %w", err)
+	}
+	c.Groups = v.groups.Groups(all)
 	return &c, nil
-}
-
-func mergeUnique(a, b []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(a)+len(b))
-	for _, v := range a {
-		if v == "" {
-			continue
-		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	for _, v := range b {
-		if v == "" {
-			continue
-		}
-		if _, ok := seen[v]; ok {
-			continue
-		}
-		seen[v] = struct{}{}
-		out = append(out, v)
-	}
-	return out
 }

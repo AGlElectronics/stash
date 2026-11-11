@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/AGlElectronics/stash/backend/internal/authbase"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
 )
 
@@ -24,16 +24,23 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
+// decodeJSON strict-decodes one JSON value from the request body into dst
+// with the shared decoder (1 MiB limit, unknown fields refused) and returns
+// a typed error handlers can hand to httperror.Render: 400 bad_request or
+// 413 request_too_large. Uploads and imports are multipart and have their
+// own limits.
 func decodeJSON(r *http.Request, dst any) error {
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		if errors.Is(err, io.EOF) {
-			return httperror.BadRequest("request body is empty")
-		}
-		return httperror.BadRequest("invalid JSON: " + err.Error())
+	return decodeJSONLimit(r, dst, authbase.DefaultMaxBodyBytes)
+}
+
+// decodeJSONLimit is decodeJSON with a smaller limit.
+func decodeJSONLimit(r *http.Request, dst any, maxBytes int64) error {
+	err := authbase.DecodeJSON(nil, r, dst, authbase.DecodeOptions{MaxBytes: maxBytes, DisallowUnknownFields: true})
+	var de *authbase.DecodeError
+	if errors.As(err, &de) {
+		return httperror.New(httperror.Code(de.Code), de.Message).WithCause(err)
 	}
-	return nil
+	return err
 }
 
 func parseUUIDParam(r *http.Request, name string) (uuid.UUID, error) {

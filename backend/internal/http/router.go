@@ -7,13 +7,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 
 	"github.com/AGlElectronics/stash/backend/internal/auth"
-	"github.com/AGlElectronics/stash/backend/internal/clientip"
+	"github.com/AGlElectronics/stash/backend/internal/authbase"
 	"github.com/AGlElectronics/stash/backend/internal/config"
 	"github.com/AGlElectronics/stash/backend/internal/denlink"
 	"github.com/AGlElectronics/stash/backend/internal/domain"
@@ -43,9 +42,12 @@ type Deps struct {
 // Version is exposed via /api/health.
 func NewRouter(deps Deps, version string) http.Handler {
 	r := chi.NewRouter()
+	authCfg := deps.Config.Auth()
 
 	r.Use(chimiddleware.RequestID)
-	r.Use(clientip.Middleware(deps.Config.TrustedProxyCIDRs))
+	// RemoteAddr becomes the real client behind the trusted proxies, for
+	// the logs and the rate limiters.
+	r.Use(authCfg.TrustedProxies.Middleware)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(60 * time.Second))
 
@@ -61,17 +63,15 @@ func NewRouter(deps Deps, version string) http.Handler {
 	}))
 	r.Use(hlog.RequestIDHandler("request_id", "X-Request-ID"))
 
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   deps.Config.CORSAllowedOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Dev-User", "X-Request-ID"},
-		ExposedHeaders:   []string{"X-Request-ID"},
-		AllowCredentials: true,
-		MaxAge:           300,
-	}))
+	// Shared hardening (authbase): API security headers on every response,
+	// dev identity headers removed unless AUTH_MODE=dev in development, and
+	// CORS that lets them through only then and exposes X-Request-ID.
+	r.Use(authbase.SecurityHeaders)
+	r.Use(authCfg.StripDevHeaders)
+	r.Use(authCfg.CORS(authbase.CORSOptions{AllowedOrigins: deps.Config.CORSAllowedOrigins}))
 
 	health := newHealthHandler(deps.Pool, version)
-	resolver := auth.NewResolver(deps.Pool, deps.Access)
+	resolver := auth.NewResolver(deps.Pool, deps.Access, deps.Config.GroupMatch)
 	authMW := auth.Middleware(deps.Config, resolver, deps.OIDCVerifier)
 
 	depts := &departmentHandler{svc: service.NewDepartmentService(deps.Pool)}
@@ -84,7 +84,7 @@ func NewRouter(deps Deps, version string) http.Handler {
 	fileH := &fileHandler{svc: deps.Files}
 	den := deps.Den
 	if den == nil {
-		den = denlink.New(deps.Pool, denlink.Config{Slug: "stash", Version: version, Mode: deps.Config.DenMode}, deps.Logger)
+		den = denlink.New(deps.Pool, deps.Config.DenConfig(version), deps.Logger)
 	}
 	settingsSvc := service.NewSettingsService(deps.Pool).WithDen(service.DenSource(den))
 	settings := &settingsHandler{svc: settingsSvc}
@@ -104,13 +104,20 @@ func NewRouter(deps Deps, version string) http.Handler {
 	r.Route("/api", func(api chi.Router) {
 		api.Use(den.RequirePaired)
 		api.Get("/health", health.get)
-		api.Get("/role-catalog", roleCatalogHandler(deps.Access))
+		// HR's service token or a staff sign-in (role catalog contract),
+		// rate limited per client so a wrong token cannot be guessed fast.
+		catalogLimiter := authbase.NewRateLimiter(authbase.RateLimitOptions{Rate: 1, Burst: 20})
+		api.With(catalogLimiter.Middleware).Get("/role-catalog", roleCatalogAuth(deps.Config.HRServiceToken, authMW, roleCatalogHandler(deps.Access)))
 		api.Get("/brand", den.BrandHandler("/api/brand"))
 		api.Get("/brand/{role}", den.AssetHandler)
 		api.Get("/den/state", den.StateHandler)
 
 		if deps.Config.PublicLostFoundClaimEnabled {
+			// Guests look up found items without signing in: 60 a minute
+			// per client IP, bursts of 20.
+			publicLimiter := authbase.NewRateLimiter(authbase.RateLimitOptions{Rate: 1, Burst: 20})
 			api.Route("/public/lostfound", func(pub chi.Router) {
+				pub.Use(publicLimiter.Middleware)
 				pub.Get("/", publicLF.search)
 				pub.Get("/{reportNumber}", publicLF.getByNumber)
 			})

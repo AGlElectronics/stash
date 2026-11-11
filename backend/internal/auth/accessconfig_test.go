@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/AGlElectronics/stash/backend/internal/domain"
+	"github.com/AGlElectronics/stash/backend/internal/groupmatch"
 )
 
 func TestParseAccessConfig_DefaultsOnly(t *testing.T) {
@@ -67,7 +68,7 @@ role = "conops"
 	if len(perms) != 2 {
 		t.Fatalf("conops has %d perms, want 2", len(perms))
 	}
-	got := cfg.Bindings.Lookup([]string{"conops-team"})
+	got := cfg.Bindings.Lookup(groupmatch.Config{}, []string{"conops-team"})
 	if len(got) != 1 || got[0].RoleName != "conops" {
 		t.Fatalf("binding lookup failed: %+v", got)
 	}
@@ -118,15 +119,36 @@ role = "admin"
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	got := cfg.RolesForGroups([]string{"stash-admin", "stash_volunteer", "stash_nope", "other"})
+	got := cfg.RolesForGroups(groupmatch.Config{}, []string{"stash-admin", "stash_volunteer", "stash_nope", "other"})
 	if strings.Join(got, ",") != "admin,volunteer" {
 		t.Fatalf("roles = %v, want [admin volunteer]", got)
 	}
-	if g := cfg.GroupForRole(domain.RoleAdmin); g != "stash-admin" {
+	if g := cfg.GroupForRole(domain.RoleAdmin); g.Stored != "stash-admin" {
 		t.Errorf("admin group = %q, want the bound group", g)
 	}
-	if g := cfg.GroupForRole(domain.RoleVolunteer); g != "stash_volunteer" {
+	if g := cfg.GroupForRole(domain.RoleVolunteer); g.Stored != "stash_volunteer" {
 		t.Errorf("volunteer group = %q, want the role key", g)
+	}
+}
+
+func TestRolesForGroups_GlobalRoleGroupsUseGroupmatch(t *testing.T) {
+	cfg := DefaultAccessConfig()
+	cases := []struct {
+		gm     groupmatch.Config
+		groups []string
+		want   string
+	}{
+		{groupmatch.Config{}, []string{"/Stash_Volunteer"}, "volunteer"},
+		{groupmatch.Config{}, []string{"/teams/stash_volunteer"}, ""},
+		{groupmatch.Config{Mode: groupmatch.ModeLast}, []string{"/teams/stash_volunteer"}, "volunteer"},
+		{groupmatch.Config{Prefix: "/con2026"}, []string{"/con2026/stash_admin"}, "admin"},
+		{groupmatch.Config{Prefix: "/con2026"}, []string{"/con2025/stash_admin"}, ""},
+		{groupmatch.Config{}, []string{"stash_nope", "volunteer"}, ""},
+	}
+	for _, tc := range cases {
+		if got := strings.Join(cfg.RolesForGroups(tc.gm, tc.groups), ","); got != tc.want {
+			t.Errorf("RolesForGroups(%+v, %v) = %q, want %q", tc.gm, tc.groups, got, tc.want)
+		}
 	}
 }
 
@@ -135,7 +157,7 @@ func TestShippedAccessConfigLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("infra/access-config.toml: %v", err)
 	}
-	if got := cfg.RolesForGroups([]string{"stash-dept-lead"}); len(got) != 1 || got[0] != domain.RoleDeptLead {
+	if got := cfg.RolesForGroups(groupmatch.Config{}, []string{"stash-dept-lead"}); len(got) != 1 || got[0] != domain.RoleDeptLead {
 		t.Fatalf("stash-dept-lead → %v", got)
 	}
 }

@@ -3,6 +3,8 @@ package auth
 import (
 	"strings"
 	"testing"
+
+	"github.com/AGlElectronics/stash/backend/internal/groupmatch"
 )
 
 func TestParseGroupBindings_Valid(t *testing.T) {
@@ -29,7 +31,7 @@ role = "readonly"
 	if len(all) != 3 {
 		t.Fatalf("got %d bindings, want 3", len(all))
 	}
-	if all[0].OIDCGroup != "stash-admin" || all[0].RoleName != "admin" {
+	if all[0].Group.Display != "stash-admin" || all[0].RoleName != "admin" {
 		t.Errorf("unexpected first binding: %+v", all[0])
 	}
 }
@@ -84,6 +86,60 @@ role = "admin"
 	}
 }
 
+func TestParseGroupBindings_StoresNormalisedAndDisplayForm(t *testing.T) {
+	gb, err := parseGroupBindings([]byte(`
+[[bindings]]
+group = " /Stash-Admin "
+role = "admin"
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	b := gb.All()[0]
+	if b.Group.Stored != "stash-admin" || b.Group.Display != "/Stash-Admin" {
+		t.Fatalf("grant = %+v", b.Group)
+	}
+	if _, err := parseGroupBindings([]byte(`
+[[bindings]]
+group = "/Stash-Admin"
+role = "admin"
+
+[[bindings]]
+group = "stash-admin"
+role = "admin"
+`)); err == nil {
+		t.Fatal("bindings that normalise to the same group must be duplicates")
+	}
+}
+
+func TestGroupBindings_LookupUsesGroupmatch(t *testing.T) {
+	gb, err := parseGroupBindings([]byte(`
+[[bindings]]
+group = "departments/security"
+role = "frontdesk"
+`))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	cases := []struct {
+		gm     groupmatch.Config
+		groups []string
+		want   int
+	}{
+		{groupmatch.Config{}, []string{"/Departments/Security"}, 1},
+		{groupmatch.Config{}, []string{"/teams/security"}, 0},
+		{groupmatch.Config{Mode: groupmatch.ModeLast}, []string{"/teams/security"}, 1},
+		{groupmatch.Config{Prefix: "/con2026"}, []string{"/con2026/departments/security"}, 1},
+		{groupmatch.Config{Prefix: "/con2026"}, []string{"/con2025/departments/security"}, 0},
+		{groupmatch.Config{}, []string{"/departments/security-lead"}, 0},
+	}
+	for _, tc := range cases {
+		if got := gb.Lookup(tc.gm, tc.groups); len(got) != tc.want {
+			t.Errorf("Lookup(%+v, %v) = %d bindings, want %d", tc.gm, tc.groups, len(got), tc.want)
+		}
+	}
+}
+
 func TestGroupBindings_LookupDedupesAcrossGroups(t *testing.T) {
 	tomlSrc := []byte(`
 [[bindings]]
@@ -98,7 +154,7 @@ role = "admin"
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	got := gb.Lookup([]string{"a-team", "b-team", "c-team"})
+	got := gb.Lookup(groupmatch.Config{}, []string{"a-team", "b-team", "c-team"})
 	if len(got) != 2 {
 		t.Fatalf("got %d bindings, want 2", len(got))
 	}
@@ -113,10 +169,10 @@ role = "admin"
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if got := gb.Lookup(nil); len(got) != 0 {
+	if got := gb.Lookup(groupmatch.Config{}, nil); len(got) != 0 {
 		t.Errorf("expected no bindings for nil groups, got %d", len(got))
 	}
-	if got := gb.Lookup([]string{}); len(got) != 0 {
+	if got := gb.Lookup(groupmatch.Config{}, []string{}); len(got) != 0 {
 		t.Errorf("expected no bindings for empty groups, got %d", len(got))
 	}
 }
@@ -129,7 +185,7 @@ func TestGroupBindings_NilSafe(t *testing.T) {
 	if gb.All() != nil {
 		t.Error("nil.All() should be nil")
 	}
-	if gb.Lookup([]string{"a"}) != nil {
+	if gb.Lookup(groupmatch.Config{}, []string{"a"}) != nil {
 		t.Error("nil.Lookup() should be nil")
 	}
 }

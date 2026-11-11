@@ -109,6 +109,9 @@ services:
     environment:
       # Origins the Content Security Policy allows besides the app itself
       # (infra/security-headers.conf.template): the sign-in server and Den.
+      # EXTRA_FRAME_SRC stays empty (the image default): Stash does not
+      # embed sandboxed HTML. /silent-callback.html is framed by Stash
+      # itself through security-headers-frame-self.conf.
       KEYCLOAK_ORIGIN: ${KEYCLOAK_ORIGIN:-http://localhost:8085}
       DEN_ORIGIN: ${DEN_ORIGIN:-}
     restart: unless-stopped

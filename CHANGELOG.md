@@ -198,6 +198,11 @@ the same version. Rebuilds get no entry here.
 
 These matter if you ran a pre-release build of Stash.
 
+- `/silent-callback.html` may be framed by the Stash web app itself, so a
+  reload can sign in again through the existing Keycloak session. Every
+  other page still sends `frame-ancestors 'none'` and `X-Frame-Options:
+  DENY`. `EXTRA_FRAME_SRC` stays empty. Both header snippets keep
+  `camera=(self)` for barcode scanning.
 - Overdue reminder emails use Den's SMTP password when Den sets
   `smtp.host` and `smtp.password_set`. Stash fetches it when it sends and
   does not store it. `SMTP_PASSWORD` is used only when Den does not set a
@@ -257,9 +262,10 @@ These matter if you ran a pre-release build of Stash.
   with `camera=(self)` for barcode scanning. Set `KEYCLOAK_ORIGIN` on the
   web app container to the sign-in server (for example
   `https://auth.con.example.org`), or the browser blocks sign-in;
-  `DEN_ORIGIN`, `S3_ORIGIN` and `EXTRA_CONNECT_SRC` are optional. The
-  inline scripts of `index.html` and `silent-callback.html` moved into
-  `theme-init.js` and `silent-callback.js`. See
+  `DEN_ORIGIN`, `S3_ORIGIN`, `EXTRA_CONNECT_SRC` and `EXTRA_FRAME_SRC` are
+  optional (`EXTRA_FRAME_SRC` stays empty). The inline scripts of
+  `index.html` and `silent-callback.html` moved into `theme-init.js` and
+  `silent-callback.js`. See
   [Nginx security headers](https://aglelectronics.github.io/con-services/concepts/shared-code/#nginx-security-headers).
 - The Helm chart in `con-services` (`deploy/charts/stash`, still `1.0.0`)
   and the Kustomize manifests set `OIDC_AUDIENCE=stash-api` and the
@@ -268,6 +274,8 @@ These matter if you ran a pre-release build of Stash.
   `development`). The web app gets `KEYCLOAK_ORIGIN` (empty
   `frontend.securityHeaders.keycloakOrigin` means the sign-in address's
   scheme and host), `DEN_ORIGIN`, `S3_ORIGIN` and `EXTRA_CONNECT_SRC`.
+  `EXTRA_FRAME_SRC` stays empty. The chart and the Kustomize nginx config
+  allow framing only of `/silent-callback.html`, by Stash itself.
 
 ### Security
 
@@ -314,6 +322,10 @@ These matter if you ran a pre-release build of Stash.
 
 ### Fixed
 
+- The web app image's fallback security-header files, used when
+  `/etc/nginx/snippets` cannot be written, now strip `${S3_ORIGIN}` as
+  well. A digit in that name used to leave the token in the policy, and
+  nginx then refused to start.
 - `GET /api/audit-log` returns `before` and `after` as JSON objects
   instead of base64 strings.
 - The backend reads the client address from `X-Forwarded-For` only when

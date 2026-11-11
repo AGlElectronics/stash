@@ -27,7 +27,7 @@ func (h *settingsHandler) get(w http.ResponseWriter, r *http.Request) {
 // patch validates and merges a partial JSON object into system settings.
 // Gated by access.manage at the router level.
 func (h *settingsHandler) patch(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err != nil {
 		var tooBig *http.MaxBytesError

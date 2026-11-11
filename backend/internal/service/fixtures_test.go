@@ -27,10 +27,6 @@ func withAssetTag(tag string) itemOpt {
 	return func(p *sqlcgen.CreateItemParams) { p.AssetTag = &tag }
 }
 
-func withManagedBy(id uuid.UUID) itemOpt {
-	return func(p *sqlcgen.CreateItemParams) { p.ManagedByDepartmentID = &id }
-}
-
 func mustItem(t *testing.T, pool *pgxpool.Pool, name string, qty int32, opts ...itemOpt) sqlcgen.Item {
 	t.Helper()
 	p := sqlcgen.CreateItemParams{

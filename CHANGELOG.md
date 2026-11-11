@@ -6,19 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-Released versions are tagged `MAJOR.MINOR.PATCH`; the images
-`ghcr.io/aglelectronics/stash-backend` and `stash-frontend` are published as
-`MAJOR.MINOR.PATCH-BUILD`, where `BUILD` counts rebuilds of the same
-version. Rebuilds get no entry here.
+Needs Den: 1.0.0 or later (Den MAJOR 1).
+
+First release, `1.0.0`. Released versions are tagged `vMAJOR.MINOR.PATCH`;
+the images `ghcr.io/aglelectronics/stash-backend` and `stash-frontend` are
+published as `MAJOR.MINOR.PATCH-BUILD`, where `BUILD` counts rebuilds of
+the same version. Rebuilds get no entry here.
 
 ### Added
 
+- Inventory: items with a barcode, a location and a managing department,
+  barcode labels, moves between locations, and damage and loss records.
+- Sign-outs and returns: which department took how many, when, and when it
+  should be back; returns record what came back, was used up, lost or
+  damaged. A sign-out can be created and confirmed in one step, with
+  optional barcode scanning.
+- Lost & Found desk: lost reports and handed-in finds with photos and
+  report numbers, matching and hand-back, and an optional public claim
+  page for guests (`PUBLIC_LOSTFOUND_CLAIM_ENABLED`).
+- Permissions per department, an audit log, a per-item history and CSV
+  exports.
 - `DEN_MODE=required` keeps the module locked until it is paired with Den:
   the API answers `503 den_pairing_required` (except health, brand, sign-in
-  and the Den connection routes) and the new public
-  `GET /api/den/state` reports
-  `{"mode","paired"}`. The default `standalone` keeps today's behaviour; any
-  other value stops the backend at startup.
+  and the Den connection routes) and the public `GET /api/den/state`
+  reports `{"mode","paired"}`. The default `standalone` runs without Den;
+  any other value stops the backend at startup.
 - The web app shows a "Connect this module to Den" page (admins) or
   "Waiting for Den" (everyone else) while the backend runs with
   `DEN_MODE=required` and is not paired yet.
@@ -28,79 +40,50 @@ version. Rebuilds get no entry here.
   covers the Gateway, nginx and Caddy; change it only for a proxy outside
   the private ranges, or set `none` when no proxy is in front. See
   [Client IP addresses](https://aglelectronics.github.io/con-services/operations/production/#client-ip-addresses).
-- CI on every pull request (tests, lint, Trivy scans) and signed images with an SBOM published to GHCR on version tags (linux/amd64; linux/arm64 optional).
 - The backend can serve HTTPS. Set `TLS_CERT_FILE` and `TLS_KEY_FILE` to a
   PEM certificate and private key; the backend re-reads both every minute,
   so a certificate renewed by cert-manager is used without a restart. With
-  neither set it serves plain HTTP as before, which is what Docker Compose
+  neither set it serves plain HTTP, which is what Docker Compose
   development uses. See
   [Internal TLS](https://aglelectronics.github.io/con-services/operations/internal-tls/).
 - The web app reads its installation settings (sign-in mode, issuer, client
-  id, scopes, API address and whether the guest claim page is shown) from `/config.json` when it starts, so
-  the published `stash-frontend` image works for every installation. nginx serves the
-  file from `/etc/conservices/config.json` with `Cache-Control: no-store`,
-  so a change shows on the next page load. Without a mounted file the web app
-  shows "Not configured yet"; a broken file gives a clear error page. See
+  id, scopes, API address and whether the guest claim page is shown) from
+  `/config.json` when it starts, so the published `stash-frontend` image
+  works for every installation. nginx serves the file from
+  `/etc/conservices/config.json` with `Cache-Control: no-store`, so a change
+  shows on the next page load. Without a mounted file the web app shows
+  "Not configured yet"; a broken file gives a clear error page. See
   [Web app settings](https://aglelectronics.github.io/con-services/modules/stash/configuration/#web-app-settings-configjson).
-- `infra/docker-compose.yml` mounts `infra/frontend-config/compose.json`
-  (dev sign-in) as the web app's `/config.json`. Set `FRONTEND_CONFIG` in
-  `.env` to use another file, for example one with real sign-in.
-
-### Changed
-
-- The development S3 server in `infra/docker-compose.yml` is now SeaweedFS 4.52 (`chrislusf/seaweedfs:4.52`, service `s3`, container `stash-s3`) instead of MinIO, which no longer publishes community images. It still listens on `localhost:9000` with the same dev key and creates the `stash-data-dev` bucket at start; there is no init job and no web console (port 9001 is gone). The backend waits until `s3` is healthy and defaults `S3_ENDPOINT` to `http://s3:9000`. To clean up, run `docker compose -f infra/docker-compose.yml up -d --remove-orphans` and remove the old MinIO volume with `docker volume rm stash_minio-data` (copy data you need first). Production is unchanged: use a managed S3 service. Presigned links are rewritten to `localhost` only when the storage host is exactly `s3` or `minio` and `S3_PUBLIC_BASE_URL` is unset (before: any host containing `minio`).
-- Kubernetes: internal TLS is on by default in the Helm chart
-  (`deploy/charts/stash`) and the Kustomize manifests
-  (`deploy/kubernetes/modules/stash`). cert-manager issues
-  `stash-backend-tls` and `stash-frontend-tls`; the backend and the web app
-  serve HTTPS inside the cluster, the web app checks the backend's
-  certificate, and the backend trusts the platform's internal CA
-  (`SSL_CERT_DIR=/etc/conservices-internal-ca`). The cluster needs
-  cert-manager, trust-manager and the platform's `conservices-internal-ca`
-  issuer. New chart values: `internalTLS.enabled`,
-  `internalTLS.createCertificates`, `internalTLS.issuerRef`,
-  `internalTLS.duration`, `internalTLS.renewBefore`,
-  `internalTLS.caConfigMap` and `internalTLS.ingressNginxAnnotations`. A
-  cluster without cert-manager sets `internalTLS.enabled: false`. See
+- Kubernetes: Helm chart `deploy/charts/stash` `1.0.0` in `con-services`,
+  released with the tag `stash/v1.0.0`, and Kustomize manifests in
+  `deploy/kubernetes/modules/stash`. Internal TLS is on by default:
+  cert-manager issues `stash-backend-tls` and `stash-frontend-tls`, the
+  backend and the web app serve HTTPS inside the cluster (web app Service
+  on port 443, backend on 8080, both named `https`), and every in-cluster
+  address uses `https://`. The cluster needs cert-manager, trust-manager
+  and the platform's `conservices-internal-ca` issuer; without them set
+  `internalTLS.enabled: false`. See
   [Set up Stash](https://aglelectronics.github.io/con-services/modules/stash/setup/).
-- Kubernetes: in-cluster addresses use `https://`: Den
-  (`DEN_INTERNAL_URL`) and MinIO (`S3_ENDPOINT`). The database URL Den shows
-  now ends in `?sslmode=verify-full&sslrootcert=/etc/conservices-internal-ca/ca.crt`;
-  the platform's PostgreSQL refuses connections without TLS.
-- Kubernetes: the web app's Service listens on port 443 (port name
-  `https`); the backend's Service stays on port 8080, now named `https`.
-- **BREAKING:** The web app image (`stash-frontend`) now runs nginx as an unprivileged user (UID 101) and listens on port **8080** inside the container instead of 80. If you run it with Docker Compose or behind your own proxy, change the target from `stash-frontend:80` to `stash-frontend:8080`; published host ports stay the same. The Helm chart and
-  the Kubernetes manifests already use port 8080 and need no change.
-- The backend is built with Go 1.27.3 (was Go 1.25). Building from source
-  needs Go 1.27.3 or newer; the `go` command downloads it automatically.
-- **BREAKING:** `infra/Dockerfile.frontend` no longer takes `VITE_AUTH_MODE`, `VITE_OIDC_*` and `VITE_PUBLIC_CLAIM_ENABLED`
-  build arguments. If you built your own frontend image to get your sign-in
-  address in, use the published image instead and put the same values in its
-  `/config.json` (Helm: `frontend.config`, filled in from
-  `config.OIDC_ISSUER_URL` and `config.OIDC_CLIENT_ID` when left out). The
-  `VITE_*` variables now only configure the dev server (`npm run dev`).
-- Form validation in the web app uses zod 4, `@hookform/resolvers` 7 and
-  react-hook-form 7.55 or newer.
+- Development: `infra/docker-compose.yml` with SeaweedFS as the S3 server
+  (`localhost:9000`, bucket `stash-data-dev`), and
+  `infra/frontend-config/compose.json` (dev sign-in) mounted as the web
+  app's `/config.json`; set `FRONTEND_CONFIG` in `.env` to use another
+  file. Building from source needs Go 1.27.3 or newer.
+- CI on every pull request (tests, lint, Trivy scans) and signed images with
+  an SBOM published to GHCR on version tags (linux/amd64; linux/arm64
+  optional).
 
 ### Security
 
-- The backend no longer believes client-supplied `X-Forwarded-For`,
-  `X-Real-IP` or `True-Client-IP` headers when working out the client
-  address: `X-Forwarded-For` is only read when the connection comes from a
-  trusted proxy (`TRUSTED_PROXY_CIDRS`), and the other two are ignored.
-- All images are rebuilt with Go 1.27.3 and updated Go libraries
-  (`go-chi/chi/v5` 5.5.0, `go-jose/v4` 4.1.9, `klauspost/compress` 1.20.3, `golang.org/x/crypto` 0.58.0, `golang.org/x/net` 0.62.0 and `golang.org/x/text` 0.43.0), fixing known vulnerabilities in
-  the Go standard library and in these libraries. The CI image scan (Trivy,
-  HIGH and CRITICAL issues that have a fix) passes for every image.
-- The web app image is built on `nginxinc/nginx-unprivileged:1.30.6-alpine`
-  with current Alpine packages (fixes for musl, zlib, curl, expat and
-  brotli) and no longer runs as root. CI now rejects a web app image that
-  runs as root.
-- The web app bundles `seroval` 1.7.10 (was 1.5.3, used by TanStack
-  Router), fixing one critical and four high-severity deserialisation
-  issues (CVE-2026-104846, CVE-2026-104845, CVE-2026-116580,
-  CVE-2026-116581, CVE-2026-116584).
+- The backend reads the client address from `X-Forwarded-For` only when
+  the connection comes from a trusted proxy (`TRUSTED_PROXY_CIDRS`), and
+  ignores `X-Real-IP` and `True-Client-IP`.
+- On Kubernetes the database URL Den shows ends in
+  `?sslmode=verify-full&sslrootcert=/etc/conservices-internal-ca/ca.crt`;
+  the platform's PostgreSQL refuses connections without TLS.
+- No image runs as root. The web app runs on
+  `nginxinc/nginx-unprivileged:1.30.6-alpine` as UID 101 and listens on
+  port 8080. All images are built with Go 1.27.3 and pass the CI image
+  scan (Trivy, HIGH and CRITICAL issues that have a fix).
 - A production build never falls back to dev sign-in: a `/config.json`
   without `authMode` means OIDC.
-- zod 3 replaced by zod 4 in the web app (npm audit HIGH,
-  GHSA-mrhx-c7xc-m3w5).

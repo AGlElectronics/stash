@@ -30,6 +30,12 @@ the same version. Rebuilds get no entry here.
   role once as `stash_<role>` (for example `stash_volunteer`), and a
   Keycloak group with exactly that name grants the role without a
   binding. `GET /api/me` returns `roles` (catalog keys) and `permissions`.
+- QR labels: the item label page can print a QR code instead of a barcode.
+  It holds a link to `/scan?code=<code>`, so any phone camera opens the
+  item in Stash; the in-app scanner (camera or USB) reads it too. Labels
+  show the organisation logo again (as a grayscale image; turn it off per
+  print).
+- `/scan?code=<code>` opens the item or Lost & Found report with that code.
 - Settings → Privacy and notifications: Lost & Found retention, the last
   day of the convention, anonymising inactive staff, the Telegram bot
   switch, overdue-return emails and the SMTP server. While Stash is paired

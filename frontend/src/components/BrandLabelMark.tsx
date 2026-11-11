@@ -6,31 +6,23 @@ type Props = {
 };
 
 /**
- * Org mark for label printing. Logo URL and fill colour come from the active
- * brand pack (standalone /brand.json or Den after pairing); the fill falls
- * back to the primary colour.
+ * Org logo for label printing (standalone /brand.json or Den after pairing).
+ * A plain grayscale image: label printers handled the earlier CSS-mask
+ * version badly.
  */
 export function BrandLabelMark({ widthMm, heightMm }: Props) {
   const { brand } = useBrandOptional();
-  const maskUrl = `url(${brand.logoUrl})`;
+  if (!brand.logoUrl) return null;
   return (
-    <div
+    <img
+      src={brand.logoUrl}
+      alt={brand.organizationName || brand.productName}
       className="brand-label-mark shrink-0"
-      role="img"
-      aria-label={brand.organizationName || brand.productName}
       style={{
         width: `${widthMm}mm`,
         height: `${heightMm}mm`,
-        backgroundColor: brand.labelMarkColor || brand.colors.primary,
-        WebkitMaskImage: maskUrl,
-        maskImage: maskUrl,
-        WebkitMaskSize: 'contain',
-        maskSize: 'contain',
-        WebkitMaskRepeat: 'no-repeat',
-        maskRepeat: 'no-repeat',
-        WebkitMaskPosition: 'center',
-        maskPosition: 'center',
-        maskMode: 'luminance',
+        objectFit: 'contain',
+        filter: 'grayscale(1) contrast(1.4)',
       }}
     />
   );

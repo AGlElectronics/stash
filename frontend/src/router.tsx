@@ -28,6 +28,7 @@ import { LostFoundNewPage } from '@/pages/LostFoundNewPage';
 import { OidcCallbackPage } from '@/pages/OidcCallbackPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { UsersPage } from '@/pages/UsersPage';
+import { ScanCodePage } from '@/pages/ScanCodePage';
 import { SignoutDetailPage } from '@/pages/SignoutDetailPage';
 import { SignoutNewPage } from '@/pages/SignoutNewPage';
 import { SignoutsListPage } from '@/pages/SignoutsListPage';
@@ -149,14 +150,18 @@ const itemLabelRoute = createRoute({
   component: ItemLabelPage,
 });
 
-// The standalone scan page was replaced by the global scan dialog in the
-// sidebar; keep the route as a redirect so old bookmarks don't 404.
+// QR labels link here (/scan?code=…); without a code it goes to the
+// dashboard, where the sidebar's scan dialog lives.
 const scanRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/scan',
-  beforeLoad: () => {
-    throw redirect({ to: '/dashboard' });
+  validateSearch: (search: Record<string, unknown>): { code?: string } => ({
+    code: typeof search.code === 'string' ? search.code : undefined,
+  }),
+  beforeLoad: ({ search }) => {
+    if (!search.code) throw redirect({ to: '/dashboard' });
   },
+  component: ScanCodePage,
 });
 
 const signoutsRoute = createRoute({

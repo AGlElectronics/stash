@@ -3,7 +3,8 @@ import { useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Printer } from 'lucide-react';
 import { getItem } from '@/api/items';
-import { LabelContent } from '@/components/LabelContent';
+import { LabelContent, type LabelSymbology } from '@/components/LabelContent';
+import { scanUrl } from '@/lib/scanCode';
 import { Button } from '@/components/ui/Button';
 import { Field, Input, Select } from '@/components/ui/Input';
 import { useLabelPrintPreset } from '@/hooks/useLabelPrintPreset';
@@ -28,10 +29,21 @@ export function ItemLabelPage() {
   const { presetId, setPresetId, preset, moduleWidth, setModuleWidth } = useLabelPrintPreset();
   const [copies, setCopies] = useState(1);
   const [showName, setShowName] = useState(true);
+  const [showLogo, setShowLogo] = useState(true);
+  const [symbology, setSymbology] = useState<LabelSymbology>('barcode');
   const [customCode, setCustomCode] = useState('');
 
   const autoCode = item.data?.asset_tag || item.data?.qr_code || item.data?.serial_number || '';
   const code = customCode.trim() || autoCode;
+  const labelProps = {
+    code,
+    title: showName ? item.data?.name : undefined,
+    preset,
+    moduleWidthMm: moduleWidth,
+    symbology,
+    qrValue: code ? scanUrl(code) : '',
+    showLogo,
+  };
 
   if (item.isLoading) {
     return <div className="p-4 text-sm text-muted-foreground">Loading…</div>;
@@ -104,20 +116,33 @@ export function ItemLabelPage() {
                 className="font-mono"
               />
             </Field>
+            <Field
+              label="Code style"
+              htmlFor="symbology"
+              hint="A QR label opens this item when scanned with any phone camera."
+            >
+              <Select
+                id="symbology"
+                value={symbology}
+                onChange={(e) => setSymbology(e.target.value as LabelSymbology)}
+              >
+                <option value="barcode">Barcode (USB scanners)</option>
+                <option value="qr">QR code (phones and USB scanners)</option>
+              </Select>
+            </Field>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={showName} onChange={(e) => setShowName(e.target.checked)} />
-              Print item name above the barcode
+              Print item name
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={showLogo} onChange={(e) => setShowLogo(e.target.checked)} />
+              Print the organisation logo
             </label>
           </div>
 
           <div className="space-y-2">
             <p className="text-xs uppercase text-muted-foreground tracking-wide">Preview ({preset.widthMm} × {preset.heightMm} mm)</p>
-            <LabelContent
-              code={code}
-              title={showName ? item.data.name : undefined}
-              preset={preset}
-              moduleWidthMm={moduleWidth}
-            />
+            <LabelContent {...labelProps} />
             {!code ? (
               <p className="text-sm text-warning">
                 This item has no asset tag, QR code, or serial number. Type one above, or assign one from
@@ -132,14 +157,7 @@ export function ItemLabelPage() {
 
       <div className="stash-print-sheet">
         {Array.from({ length: copies }).map((_, idx) => (
-          <LabelContent
-            key={idx}
-            code={code}
-            title={showName ? item.data.name : undefined}
-            preset={preset}
-            moduleWidthMm={moduleWidth}
-            forPrint
-          />
+          <LabelContent key={idx} {...labelProps} forPrint />
         ))}
       </div>
     </>

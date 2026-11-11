@@ -10,6 +10,11 @@ import {
   setItemBarcode,
 } from '@/api/items';
 import { lookupLostFoundByReportNumber } from '@/api/lostfound';
+import {
+  extractScanCode,
+  isLostFoundReportNumber,
+  normalizeLostFoundReportNumber,
+} from '@/lib/scanCode';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { Field, Input, Select } from '@/components/ui/Input';
@@ -28,15 +33,6 @@ type LookupState =
   | { kind: 'not_found'; code: string }
   | { kind: 'lf_not_found'; code: string }
   | { kind: 'error'; message: string };
-
-/** Report numbers printed on found-item labels, e.g. LF-0003. */
-function isLostFoundReportNumber(code: string): boolean {
-  return /^LF-\d+$/i.test(code.trim());
-}
-
-function normalizeLostFoundReportNumber(code: string): string {
-  return code.trim().toUpperCase();
-}
 
 /**
  * Global barcode lookup, openable from anywhere via the sidebar scan button.
@@ -70,7 +66,7 @@ export function ScanDialog({ open, onClose }: { open: boolean; onClose: () => vo
   }, [open, cameraActive]);
 
   async function lookup(raw: string) {
-    const trimmed = raw.trim();
+    const trimmed = extractScanCode(raw);
     if (!trimmed) return;
     setState({ kind: 'searching', code: trimmed });
 
@@ -110,8 +106,8 @@ export function ScanDialog({ open, onClose }: { open: boolean; onClose: () => vo
       <Dialog
         open={open}
         onClose={onClose}
-        title="Scan barcode"
-        description="Inventory codes (asset tags) or Lost & Found report numbers (LF-0003). USB scanners type + Enter automatically."
+        title="Scan barcode or QR code"
+        description="Inventory codes (asset tags), QR labels or Lost & Found report numbers (LF-0003). USB scanners type + Enter automatically; on a phone, use the camera."
         className="max-w-6xl w-[min(100vw-2rem,72rem)]"
       >
         <div className="space-y-4">
@@ -123,7 +119,7 @@ export function ScanDialog({ open, onClose }: { open: boolean; onClose: () => vo
                 stream={cameraStream}
                 onResult={(text) => {
                   stopCamera();
-                  setCode(text);
+                  setCode(extractScanCode(text));
                   void lookup(text);
                 }}
               />

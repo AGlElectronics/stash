@@ -252,6 +252,13 @@ These matter if you ran a pre-release build of Stash.
   inline scripts of `index.html` and `silent-callback.html` moved into
   `theme-init.js` and `silent-callback.js`. See
   [Nginx security headers](https://aglelectronics.github.io/con-services/concepts/shared-code/#nginx-security-headers).
+- The Helm chart in `con-services` (`deploy/charts/stash`, still `1.0.0`)
+  and the Kustomize manifests set `OIDC_AUDIENCE=stash-api` and the
+  group-matching variables, and name `DEN_LINK_ENCRYPTION_KEY` on its own
+  so a Secret without it stops the pod (optional only while `APP_ENV` is
+  `development`). The web app gets `KEYCLOAK_ORIGIN` (empty
+  `frontend.securityHeaders.keycloakOrigin` means the sign-in address's
+  scheme and host), `DEN_ORIGIN`, `S3_ORIGIN` and `EXTRA_CONNECT_SRC`.
 
 ### Security
 

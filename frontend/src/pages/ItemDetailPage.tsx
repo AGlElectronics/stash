@@ -305,7 +305,7 @@ export function ItemDetailPage() {
                         onClick={() => {
                           if (
                             window.confirm(
-                              `Replace ${it.asset_tag ?? 'current barcode'} with a new generated AW code?`
+                              `Replace ${it.asset_tag ?? 'current barcode'} with a newly generated code?`
                             )
                           ) {
                             assign.mutate();
@@ -314,19 +314,19 @@ export function ItemDetailPage() {
                         disabled={assign.isPending}
                       >
                         <Tag className="w-4 h-4" />
-                        New AW code
+                        New code
                       </Button>
                     </div>
                   </>
                 ) : (
                   <>
                     <p className="text-sm text-muted-foreground text-center">
-                      No barcode yet. Generate an AW code, or scan a pre-printed sticker with the
+                      No barcode yet. Generate a code, or scan a pre-printed sticker with the
                       Scan button in the sidebar.
                     </p>
                     <Button onClick={() => assign.mutate()} disabled={assign.isPending} size="sm">
                       <Tag className="w-4 h-4" />
-                      {assign.isPending ? 'Generating…' : 'Generate AW code'}
+                      {assign.isPending ? 'Generating…' : 'Generate code'}
                     </Button>
                   </>
                 )}

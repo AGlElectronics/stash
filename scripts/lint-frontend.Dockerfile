@@ -4,7 +4,7 @@
 # See lint-backend.Dockerfile for why we use `docker build` instead of
 # `docker run -v` here.
 #
-# Pin to the same Node version as .gitlab-ci.yml / Dockerfile.frontend.
+# Pin to the same Node version as infra/Dockerfile.frontend.
 
 FROM node:22-alpine AS lint
 WORKDIR /src

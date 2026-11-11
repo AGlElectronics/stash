@@ -15,7 +15,8 @@
 #                      to copy the generated Go back to the host (also fixes
 #                      IDE intellisense after editing queries/migrations).
 #
-# Pin to the same versions as .gitlab-ci.yml. Update both together.
+# Pin to the same versions as infra/Dockerfile.backend and the shared CI
+# (module-ci.yml in con-services). Update them together.
 
 FROM golangci/golangci-lint:v2.11-alpine AS tooling
 ARG SQLC_VERSION=1.30.0

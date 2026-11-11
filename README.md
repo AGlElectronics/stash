@@ -6,214 +6,101 @@
 > Con Services is under active development. Expect breaking changes, missing
 > features and bugs. Do not use it for real events or real data yet.
 
-Reusable inventory module for Con Services (AGl Electronics). Tracks items, locations, departments, and sign-outs end-to-end with a full audit trail and per-item lifecycle history.
+Stash is the inventory module of [Con Services](https://aglelectronics.github.io/con-services/):
+items, locations and departments, sign-outs and returns, packing lists,
+purchase records and requests, barcode and QR labels, and the Lost & Found
+desk (with an optional Telegram bot for guests). Every change is in the
+audit log and in each item's history.
 
-## What's in the box
+**Documentation:** <https://aglelectronics.github.io/con-services/modules/stash/>
 
-- **Backend** — Go 1.27, [chi](https://github.com/go-chi/chi), PostgreSQL via [pgx](https://github.com/jackc/pgx) and [sqlc](https://sqlc.dev), [Goose](https://github.com/pressly/goose) migrations, S3-compatible object storage (SeaweedFS in dev), [zerolog](https://github.com/rs/zerolog) structured logs.
-- **Frontend** — React 19, [TanStack Router](https://tanstack.com/router) + [TanStack Query](https://tanstack.com/query), [Rsbuild](https://rsbuild.dev) (no Vite per project policy), Tailwind + shadcn-style components, PWA manifest + service worker.
-- **Auth** — Two modes:
-  - `dev`: `X-Dev-User` header bypass (local dev, fast iteration).
-  - `oidc`: OIDC bearer JWTs verified against an issuer like Keycloak; users are JIT-provisioned and their roles are recomputed on every request from the OIDC `groups`/`roles` claim.
-- **RBAC** — Hybrid: fixed Go role names (`admin`, `inventory_manager`, `dept_lead`, `volunteer`, `readonly`) and DB-managed bindings that map external IdP groups to those roles, optionally scoped to a department.
-- **CI** — GitLab CI pipeline at [.gitlab-ci.yml](.gitlab-ci.yml) covering lint, unit tests, an integration test stage with Postgres, and artifact builds for both apps.
+| Page | What it covers |
+| --- | --- |
+| [Set up Stash](https://aglelectronics.github.io/con-services/modules/stash/setup/) | Kubernetes (Helm chart and Kustomize), Docker Compose |
+| [Configuration](https://aglelectronics.github.io/con-services/modules/stash/configuration/) | Every environment variable, `access-config.toml`, the web app's `/config.json` |
+| [Admin guide](https://aglelectronics.github.io/con-services/modules/stash/admin-guide/) | Roles, settings, retention, Telegram, emails, before/during/after the event |
+| [Volunteer and front-desk guide](https://aglelectronics.github.io/con-services/modules/stash/volunteer-guide/) | Scanning, labels, signing gear out and back in, Lost & Found |
+| [API](https://aglelectronics.github.io/con-services/modules/stash/api/) | Every endpoint with `curl` examples |
 
-## Repository layout
+## Quick start (Docker Compose, dev only)
 
-```text
-stash/
-  backend/          # Go service (cmd/server, internal/*)
-    cmd/server/     # main entry point
-    internal/
-      app/          # bootstrap (config, db, migrations, files, http)
-      auth/         # OIDC verifier, dev bypass, RBAC user/permissions
-      config/       # env loading + validation
-      db/           # pgx pool + transaction helper + migration runner
-      domain/       # enums and string constants for permissions/roles
-      events/       # per-item lifecycle event writer
-      audit/        # forensic audit log writer
-      files/        # S3 client + service
-      http/         # chi router + per-resource handlers + DTOs
-      service/      # business logic (transactional, audit-emitting)
-      repository/   # sqlc-generated typed queries (in sqlcgen/)
-    queries/        # SQL files consumed by sqlc
-    migrations/     # Goose migrations (embedded into the binary)
-  frontend/         # React 19 SPA (Rsbuild, PWA)
-    src/api/        # typed fetch wrappers per resource
-    src/auth/       # dev auth shim (sets X-Dev-User from localStorage)
-    src/components/ # ui kit + feature components
-    src/forms/      # React Hook Form + Zod forms
-    src/hooks/      # TanStack Query hooks for reference data
-    src/pages/      # one component per route
-    src/router.tsx  # code-based TanStack Router config
-  infra/            # Dockerfiles, nginx.conf, docker-compose.yml
-  docs/             # security hardening plan, Argo CD / prod deployment notes
-  deploy/kubernetes/# Kustomize starter for cluster (no seed data)
-  scripts/smoke/    # PowerShell API smoke tests (local dev)
-  .gitlab-ci.yml    # custom pipeline (replaces Auto-DevOps)
-```
-
-## Quick start
-
-### 1. Local development (Docker Compose)
+You need Docker. From this folder:
 
 ```sh
 cp .env.example .env
-docker compose -f infra/docker-compose.yml up --build
+docker compose --env-file .env -f infra/docker-compose.yml up --build
 ```
 
-This brings up:
+Open <http://localhost:3000>. The stack runs PostgreSQL (`:5432`), SeaweedFS
+as S3 (`:9000`), the backend (`:8080`, migrations run on start) and the web
+app (`:3000`). Sign-in is `dev` mode: the first request creates the user
+`dev-admin` as an admin. To try another role, set
+`localStorage["stash.devUser"]` in the browser to `bob:volunteer` (or
+`carol:frontdesk,readonly`) and reload. Dev mode is for your own computer
+only; real installations use `AUTH_MODE=oidc`.
 
-- `postgres` on `:5432` (database `stash`, user `stash`, password `stash`)
-- `s3` on `:9000` (SeaweedFS, S3 API only, credentials `stash`/`stashstash`; creates the `stash-data-dev` bucket on start)
-- `backend` on `:8080` (runs migrations on boot)
-- `frontend` on `:3000`
+Without Docker: Go 1.27.3+, Node 22+, a PostgreSQL and an S3 endpoint, then
+`cd backend && sqlc generate && go run ./cmd/server` and
+`cd frontend && npm install && npm run dev`.
 
-Visit [http://localhost:3000](http://localhost:3000). Auth is in `dev` mode — every request uses the seeded `dev-admin` user with global admin permissions.
+## Roles
 
-### 2. Local development (without Docker)
+Roles are global (a department lead handles every department's gear) and
+defined in [`infra/access-config.toml`](infra/access-config.toml), which the
+backend reads at start. The role catalog (`GET /api/role-catalog`) lists each
+role as `stash_<role>`; HR assigns them, and a Keycloak group named exactly
+`stash_<role>` grants the role without a binding.
 
-Requires Go 1.27.3+, Node 20+, a running PostgreSQL, and an S3-compatible endpoint (for example the `s3` service of the Compose stack).
+| Role | What it is for |
+| --- | --- |
+| `stash_admin` | Everything, including settings, Den pairing and people |
+| `stash_inventory_manager` | Logistics: items, sign-outs, reference data, purchases, requests, exports |
+| `stash_dept_lead` | Sign-outs and returns, damage and loss, exports, requests |
+| `stash_volunteer` | Look up items, run sign-outs and returns, ask for gear |
+| `stash_readonly` | Read items, sign-outs and the audit log |
+| `stash_frontdesk` | Lost & Found: log, resolve, notify guests |
+| `stash_conops_lead` | All of Lost & Found plus audit and exports |
+| `stash_conops_readonly` | Read Lost & Found reports |
+
+Full permission list: [Configuration → access-config.toml](https://aglelectronics.github.io/con-services/modules/stash/configuration/).
+
+## Development
 
 ```sh
-# Backend
+# Backend (sqlc output is not committed; regenerate after changing queries/ or migrations/)
 cd backend
-go run ./cmd/server          # picks up env from ../.env
-
-# Frontend (in another shell)
-cd frontend
-npm install
-npm run dev                  # http://localhost:3000, proxies /api to :8080
-```
-
-## Configuration
-
-All backend config is environment-driven; see [.env.example](.env.example). Required for production:
-
-- `DATABASE_URL` — Postgres DSN.
-- `S3_*` — Bucket and credentials for object storage (any S3-compatible service).
-- `AUTH_MODE=oidc`, `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID` — for real auth. Optional `OIDC_AUDIENCE` if it differs from the client id.
-- `ACCESS_CONFIG_PATH` — path to the access config TOML file (required in OIDC mode, see below). Legacy alias: `OIDC_BINDINGS_PATH`.
-- `CORS_ALLOWED_ORIGINS` — comma-separated list of allowed origins for the SPA.
-- `TRUSTED_PROXY_CIDRS` — proxies whose `X-Forwarded-For` is believed; the default private ranges fit the Gateway, nginx and Caddy. See [Client IP addresses](https://aglelectronics.github.io/con-services/operations/production/#client-ip-addresses).
-
-## RBAC model
-
-Permissions are simple strings (`item.create`, `signout.return`, `lostfound.view`, …) listed in [backend/internal/domain/domain.go](backend/internal/domain/domain.go).
-
-Roles bundle permissions:
-
-| role | scope | what it can do |
-| --- | --- | --- |
-| `admin` | global | everything |
-| `inventory_manager` | global or dept | manage items, sign-outs, locations, categories |
-| `dept_lead` | dept | sign things out and accept returns for their department |
-| `volunteer` | dept | view + use existing sign-outs |
-| `readonly` | global | view-only |
-| `frontdesk` | global | Lost & Found only (view / create / resolve reports) |
-
-Access control is managed **exclusively in the access config TOML file** pointed at by `ACCESS_CONFIG_PATH` — there is no access-control UI and no role data in the database. The file maps OIDC groups to roles and defines each role's permissions:
-
-```toml
-# Permission catalog (reference) at the top of infra/access-config.toml
-
-[roles.admin]
-permissions = ["item.view", "item.create", "lostfound.view", …]
-
-[roles.frontdesk]
-permissions = ["lostfound.view", "lostfound.create", "lostfound.resolve", "file.upload"]
-
-[[bindings]]
-group = "stash-admin"       # exact OIDC group / client role claim
-role = "admin"
-# department_id = "<uuid>"  # optional, scopes the role to one department
-```
-
-When a user authenticates via OIDC, their `groups` claim (or `roles` if your IdP uses that name) is matched against the bindings and their permissions are computed per-request — nothing is persisted, so removing a user from a group in the IdP takes effect on their next request. The file is read once at startup; restart the backend to pick up changes. In `AUTH_MODE=dev` the file is optional and dev users are admins.
-
-## Item lifecycle and history
-
-Every state change to an item — moves, condition changes, damage, repair, sign-out, return, retire/restore — writes a row to `item_events` inside the same transaction. The detail page at `/items/:id` renders this as a timeline with icons per event type.
-
-A separate `audit_log` table captures the same events plus all CRUD operations on departments, categories, locations, files and bindings. It records the actor, before/after JSON snapshots, and any operator-supplied note. The Audit Log page (`/audit-log`) gives admins a filterable view.
-
-## Sign-out flow
-
-The hot path is the **fast sign-out** from the items list:
-
-1. Logistics opens `/items`, types "power strip" in the search box, sees `Available 13 / 15 owned`.
-2. Clicks **Sign out** on the row. A small dialog opens, pre-filled with the right item; user picks a department and types the recipient's name.
-3. Click confirm → backend creates a sign-out, jumps the state machine straight to `signed_out`, decrements availability, writes the audit + event rows. Done in under a minute.
-
-Returns are processed from the sign-out detail page (`/signouts/:id`): operators enter quantities returned / consumed / lost / damaged per line. The state machine moves to `partially_returned` until everything is settled, then to `returned`. Admins can `close` returned sign-outs to archive them.
-
-## CSV exports
-
-- `GET /api/export/items.csv` — full item dump.
-- `GET /api/export/signouts.csv` — full sign-out dump.
-
-Both require the `export.create` permission (admin / inventory_manager by default).
-
-## Running tests
-
-Generated **sqlc** code (`internal/repository/sqlcgen/`) is not committed (see `.gitignore`). Regenerate after changing `queries/*.sql` or migrations used as schema:
-
-```sh
-cd backend
-go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest   # once
 sqlc generate
-```
-
-```sh
-# Backend
-cd backend
-sqlc generate                # required on fresh clones before build/test/lint
-go test ./...
 go vet ./...
-golangci-lint run            # if installed
+STASH_TEST_DATABASE_URL='postgres://postgres:postgres@localhost:5432/stash_test?sslmode=disable' go test ./...
 
 # Frontend
 cd frontend
-npm run lint
-npm run typecheck
-npm run test
+npm run lint && npm run typecheck && npm test
 ```
 
-## Smoke tests
+Database tests run when `STASH_TEST_DATABASE_URL` is set; each test gets its
+own schema. Optional: `STASH_TEST_S3_ENDPOINT` (+ `_ACCESS_KEY`, `_SECRET_KEY`)
+for the S3 client test and `STASH_TEST_SMTP_ADDR` (for example the dev
+mailpit at `localhost:1025`) for the email test. `scripts/lint.ps1` runs the
+same lint as CI in Docker.
 
-PowerShell scripts under [`scripts/smoke/`](scripts/smoke/) hit a running stack (Compose or local). Examples:
+CI runs the shared pipeline of `con-services`
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
-- [`scripts/smoke/smoke-test.ps1`](scripts/smoke/smoke-test.ps1) — base CRUD + item lifecycle (backend `:8080`).
-- [`scripts/smoke/smoke-signouts.ps1`](scripts/smoke/smoke-signouts.ps1) — sign-out create / return / close + history.
-- [`scripts/smoke/smoke-fullstack.ps1`](scripts/smoke/smoke-fullstack.ps1) — seed + sign-out + frontend check (`:3000` proxy).
-- [`scripts/smoke/smoke-images.ps1`](scripts/smoke/smoke-images.ps1) — file upload / primary image.
-- [`scripts/smoke/smoke-rbac.ps1`](scripts/smoke/smoke-rbac.ps1) — access API smoke.
+## Smoke tests and deployment files
 
-From repo root: `pwsh -File scripts/smoke/smoke-test.ps1` (after starting the stack).
+These live in the `con-services` repository:
 
-## Production & cluster deploy
-
-- [docs/security-hardening-plan.md](docs/security-hardening-plan.md) — attack surface review and hardening backlog.
-- [docs/deployment-argocd.md](docs/deployment-argocd.md) — Argo CD / Kubernetes checklist (**no sample inventory**; OIDC-only).
-- [deploy/kubernetes/README.md](deploy/kubernetes/README.md) — minimal Kustomize base.
-
-Build the **cluster** frontend image with `NGINX_CONF=nginx.k8s.conf` so `/api` proxies to the `stash-backend` Service (see `infra/Dockerfile.frontend`).
-
-Object storage: production should use a **private** managed S3 bucket. Until that exists, you can point `S3_*` at a **temporary** S3-compatible server — see `deploy/kubernetes/examples/` and `docs/deployment-argocd.md`.
+- [`scripts/smoke-stash.ps1`](https://github.com/AGlElectronics/con-services/blob/main/scripts/smoke-stash.ps1) — end-to-end check of a running Stash (roles, items, sign-out lifecycle, files, Lost & Found, exports).
+- [`deploy/charts/stash`](https://github.com/AGlElectronics/con-services/tree/main/deploy/charts/stash) — Helm chart.
+- [`deploy/kubernetes/modules/stash`](https://github.com/AGlElectronics/con-services/tree/main/deploy/kubernetes/modules/stash) — Kustomize manifests.
 
 ## Backups
 
 In the full Con Services stack, Den's operator backs up Stash's database and
-bucket every night along with everything else (see
-[docs/operations.md](../docs/operations.md)).
+bucket every night. Run standalone, Stash is not backed up by anything: see
+[Databases and backups](https://aglelectronics.github.io/con-services/operations/databases-and-backups/).
 
-**Run standalone, or on a database server Den's operator doesn't manage,
-Stash is not backed up by anything. That is the administrator's job:**
-schedule a `pg_dump --format=custom` of the Stash database and a copy of its
-bucket, encrypt both, and keep them somewhere other than the server.
+## Changes
 
-## Roadmap
-
-- v0.5 — Telegram bot for mobile sign-outs ("walk to logistics with no laptop").
-- v0.5 — Per-item file attachments (receipts, manuals, photos) wired to the existing presigned-upload endpoints.
-- v0.5 — Notifications when expected returns slip past `expected_return_at`.
+See [CHANGELOG.md](CHANGELOG.md).

@@ -192,6 +192,16 @@ the same version. Rebuilds get no entry here.
   and photo are no longer public (the photo route is gone), and search
   matches item names only.
 
+### Removed
+
+- The GitLab pipeline (`.gitlab-ci.yml`); CI runs on GitHub with the shared
+  `con-services` pipeline.
+- In-repo planning documents (Argo CD notes, security plan, backend plan,
+  Telegram proposal, original project plan). What is still true is on the
+  documentation site.
+- Offline mode is no longer on the roadmap: the service worker only caches
+  the app itself.
+
 ### Fixed
 
 - `GET /api/audit-log` returns `before` and `after` as JSON objects

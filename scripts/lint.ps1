@@ -15,7 +15,7 @@
     via `docker buildx --output type=local`, which keeps IDE
     intellisense in sync after editing queries/migrations.
 
-    Versions are pinned in the Dockerfiles to match .gitlab-ci.yml.
+    Versions are pinned in the Dockerfiles to match the shared CI (module-ci.yml).
 
 .PARAMETER Target
     backend | frontend | all (default: all)

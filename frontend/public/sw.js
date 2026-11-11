@@ -1,6 +1,6 @@
 // Stash service worker. Caches the static bundle so the app loads on slow
-// venue Wi-Fi. API responses are NOT cached - online-only for now (full
-// offline mode is on the v1.0 roadmap).
+// venue Wi-Fi. API responses are NOT cached: Stash needs a connection to
+// work, and an offline mode is not planned.
 //
 // Strategy:
 //   /api/...          -> not handled, browser does default fetch

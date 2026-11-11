@@ -8,7 +8,7 @@ ENV CGO_ENABLED=0 GOFLAGS=-buildvcs=false
 # sqlc generates internal/repository/sqlcgen/ from queries/*.sql at build
 # time. The directory is gitignored — CI regenerates it on every job, and
 # this Dockerfile does the same so a plain `docker build .` works without
-# any host-side prep. Keep SQLC_VERSION in sync with .gitlab-ci.yml.
+# any host-side prep. Keep SQLC_VERSION in sync with scripts/lint-backend.Dockerfile.
 ARG SQLC_VERSION=v1.30.0
 RUN apk add --no-cache wget ca-certificates tar && \
     arch="$(uname -m)" && \

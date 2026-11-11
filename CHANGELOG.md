@@ -150,6 +150,15 @@ the same version. Rebuilds get no entry here.
   and the platform's `conservices-internal-ca` issuer; without them set
   `internalTLS.enabled: false`. See
   [Set up Stash](https://aglelectronics.github.io/con-services/modules/stash/setup/).
+- Helm chart: `networkPolicy.telegram` (on by default) lets the backend
+  reach `api.telegram.org` on 443 for the Lost & Found bot, and
+  `networkPolicy.smtp` (off by default; set `fqdns` or `cidrs`) lets it
+  reach your SMTP server on 587 and 465 for overdue emails. With
+  `networkPolicy.gateway.cilium: true` both become `toFQDNs` rules in the
+  CiliumNetworkPolicy `stash-backend-external`; otherwise `ipBlock` rules.
+  `existingSecret` may also hold the optional keys `TELEGRAM_BOT_TOKEN`
+  and `SMTP_PASSWORD`. See
+  [Network policies](https://aglelectronics.github.io/con-services/operations/network-policies/).
 - Development: `infra/docker-compose.yml` with SeaweedFS as the S3 server
   (`localhost:9000`, bucket `stash-data-dev`), and
   `infra/frontend-config/compose.json` (dev sign-in) mounted as the web

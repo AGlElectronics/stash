@@ -77,7 +77,9 @@ func NewRouter(deps Deps, version string) http.Handler {
 	depts := &departmentHandler{svc: service.NewDepartmentService(deps.Pool)}
 	cats := &categoryHandler{svc: service.NewCategoryService(deps.Pool)}
 	locs := &locationHandler{svc: service.NewLocationService(deps.Pool)}
-	items := &itemHandler{svc: service.NewItemService(deps.Pool), files: deps.Files}
+	items := &itemHandler{svc: service.NewItemService(deps.Pool), files: deps.Files, purchases: service.NewPurchaseService(deps.Pool)}
+	requests := &requestHandler{svc: service.NewRequestService(deps.Pool)}
+	packing := &packingHandler{svc: service.NewPackingService(deps.Pool)}
 	signouts := &signoutHandler{svc: service.NewSignoutService(deps.Pool)}
 	fileH := &fileHandler{svc: deps.Files}
 	den := deps.Den
@@ -164,6 +166,8 @@ func NewRouter(deps Deps, version string) http.Handler {
 			secure.Get("/dashboard", dashboardHandler(deps.Pool))
 			secure.Get("/notifications", notificationsHandler(overdue))
 			secure.Route("/users", users.routes)
+			secure.Route("/requests", requests.routes)
+			secure.Route("/packing-lists", packing.routes)
 			// /settings: anyone authenticated can read; only admins can patch.
 			// Split here so read and patch can use different middleware (chi Route
 			// would apply one middleware block to all verbs on that sub-router).

@@ -10,8 +10,10 @@ import { isDenPairingRequired, useDenState } from '@/hooks/useDenState';
 import { useMe, PERMS } from '@/hooks/useMe';
 import {
   Boxes,
+  ClipboardList,
   FileSpreadsheet,
   FolderTree,
+  Inbox,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -58,6 +60,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Operations',
     items: [
       { to: '/signouts', label: 'Sign-outs', icon: Send, perms: [PERMS.signoutView] },
+      { to: '/packing-lists', label: 'Packing lists', icon: ClipboardList, perms: [PERMS.signoutView] },
+      { to: '/requests', label: 'Requests', icon: Inbox, perms: [PERMS.requestCreate, PERMS.requestManage] },
       { to: '/lost-and-found', label: 'Lost & Found', icon: Search, perms: [PERMS.lostfoundView] },
       { to: '/departments', label: 'Departments', icon: Users, perms: [PERMS.itemView, PERMS.departmentManage] },
     ],

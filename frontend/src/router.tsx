@@ -30,6 +30,8 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { UsersPage } from '@/pages/UsersPage';
 import { ScanCodePage } from '@/pages/ScanCodePage';
 import { ImportExportPage } from '@/pages/ImportExportPage';
+import { RequestsPage } from '@/pages/RequestsPage';
+import { PackingListDetailPage, PackingListsPage } from '@/pages/PackingListsPage';
 import { SignoutDetailPage } from '@/pages/SignoutDetailPage';
 import { SignoutNewPage } from '@/pages/SignoutNewPage';
 import { SignoutsListPage } from '@/pages/SignoutsListPage';
@@ -260,6 +262,24 @@ const settingsRoute = createRoute({
   component: SettingsPage,
 });
 
+const requestsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/requests',
+  component: RequestsPage,
+});
+
+const packingListsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/packing-lists',
+  component: PackingListsPage,
+});
+
+const packingListDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: '/packing-lists/$id',
+  component: PackingListDetailPage,
+});
+
 const importExportRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/import-export',
@@ -302,6 +322,9 @@ const routeTree = rootRoute.addChildren([
     settingsRoute,
     usersRoute,
     importExportRoute,
+    requestsRoute,
+    packingListsRoute,
+    packingListDetailRoute,
   ]),
 ]);
 

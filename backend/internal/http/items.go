@@ -16,8 +16,9 @@ import (
 )
 
 type itemHandler struct {
-	svc   *service.ItemService
-	files *files.Service
+	svc       *service.ItemService
+	files     *files.Service
+	purchases *service.PurchaseService
 }
 
 type itemDTO struct {
@@ -121,6 +122,9 @@ func (h *itemHandler) routes(r chi.Router) {
 
 	view.Get("/{id}/availability", h.availability)
 	view.Get("/{id}/history", h.history)
+	purchases := &purchaseHandler{svc: h.purchases}
+	view.Get("/{id}/purchases", purchases.list)
+	r.With(require(domain.PermItemAdjust)).Post("/{id}/purchases", purchases.create)
 
 	r.With(require(domain.PermItemMove)).Post("/{id}/move", h.move)
 	r.With(require(domain.PermItemAdjust)).Post("/{id}/adjust-quantity", h.adjust)

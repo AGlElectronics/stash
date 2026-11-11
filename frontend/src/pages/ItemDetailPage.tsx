@@ -32,6 +32,7 @@ import { ItemHistoryTimeline } from '@/components/ItemHistoryTimeline';
 import { ItemActionDialog } from '@/components/ItemActionDialogs';
 import { ItemImagesPanel } from '@/components/ItemImagesPanel';
 import { ItemAttachmentsPanel } from '@/components/ItemAttachmentsPanel';
+import { ItemPurchasesPanel } from '@/components/ItemPurchasesPanel';
 import { useCategories, useDepartments, useLocations } from '@/hooks/useReferenceData';
 import { useFileBlobUrl } from '@/hooks/useFileBlobUrl';
 import { buildLocationPathMap } from '@/lib/locationPath';
@@ -416,6 +417,15 @@ export function ItemDetailPage() {
             </CardHeader>
             <CardContent>
               <ItemAttachmentsPanel itemId={id} />
+            </CardContent>
+          </Card>
+
+          <Card className="md:col-span-3">
+            <CardHeader>
+              <CardTitle>Purchases</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ItemPurchasesPanel itemId={id} />
             </CardContent>
           </Card>
         </div>

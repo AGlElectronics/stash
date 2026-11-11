@@ -40,7 +40,7 @@ var defaultRoleDescriptions = map[string]string{
 	"admin":             "Everything in Stash, including access and settings.",
 	"inventory_manager": "Logistics team: items, sign-outs, locations and categories.",
 	"dept_lead":         "Department lead: sign-outs and returns for every department's gear.",
-	"volunteer":         "Look up items and run sign-outs.",
+	"volunteer":         "Look up items, run sign-outs and ask for gear.",
 	"readonly":          "Read-only view of inventory and sign-outs.",
 	"frontdesk":         "ConOps front desk: log and resolve Lost & Found.",
 	"conops_lead":       "Full Lost & Found plus reopen, delete, audit and exports.",

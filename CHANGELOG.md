@@ -47,6 +47,18 @@ the same version. Rebuilds get no entry here.
   `damaged`, `lost`, `expiring` (within 60 days), `retired` and
   `overdue-signouts` (`GET /api/export/reports` lists them). They need
   `export.create` and are audited as `export.report`.
+- Purchase records: Item page → Purchases lists what was bought, when, from
+  whom and for how much (`GET`/`POST /api/items/{id}/purchases`); a
+  purchase can add its quantity to stock. Recording needs `item.adjust`.
+- Item requests (`/requests`, `/api/requests`): anyone with the new
+  `request.create` (volunteer, dept_lead, inventory_manager, admin) asks for
+  gear; people with the new `request.manage` (inventory_manager, admin)
+  approve, order, fulfil or reject it, and the requester can cancel their
+  own open request. Every step is audited.
+- Event packing lists (`/packing-lists`, `/api/packing-lists`): list what
+  goes to an event or department, track how much is packed against what is
+  available, and turn the list into a draft sign-out in one step. Viewing
+  needs `signout.view`, changing `signout.create`.
 - Item page → Documents: attach, download and delete receipts, invoices,
   manuals, warranties and other files (up to 50 MB each).
 - Settings → Privacy and notifications: Lost & Found retention, the last

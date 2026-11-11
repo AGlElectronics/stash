@@ -10,6 +10,8 @@
 #               user.manage  access.manage  audit.view  export.create  file.upload
 # Lost & Found: lostfound.view  lostfound.create  lostfound.edit  lostfound.resolve
 #               lostfound.reopen  lostfound.delete  lostfound.notify
+# Requests:     request.create  request.manage
+# (Purchases use item.view / item.adjust; packing lists signout.view / signout.create.)
 #
 # Roles below replace built-in defaults when listed. Omit a role to keep the
 # code default. Every role is global: it applies to every department's gear.
@@ -56,6 +58,8 @@ permissions = [
   "lostfound.reopen",
   "lostfound.delete",
   "lostfound.notify",
+  "request.create",
+  "request.manage",
 ]
 
 # Logistics / inventory team — items, sign-outs, locations, no L&F.
@@ -82,6 +86,8 @@ permissions = [
   "audit.view",
   "export.create",
   "file.upload",
+  "request.create",
+  "request.manage",
 ]
 
 # Department lead — sign-outs and returns for every department's gear.
@@ -100,16 +106,18 @@ permissions = [
   "file.upload",
   "audit.view",
   "export.create",
+  "request.create",
 ]
 
-# Volunteer — look up items and run sign-outs.
+# Volunteer — look up items, run sign-outs and ask for gear.
 [roles.volunteer]
-description = "Look up items and run sign-outs."
+description = "Look up items, run sign-outs and ask for gear."
 permissions = [
   "item.view",
   "signout.view",
   "signout.create",
   "signout.return",
+  "request.create",
 ]
 
 # Read-only across inventory and sign-outs.

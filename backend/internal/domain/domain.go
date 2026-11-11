@@ -152,6 +152,8 @@ const (
 	PermLostfoundReopen  = "lostfound.reopen"
 	PermLostfoundDelete  = "lostfound.delete"
 	PermLostfoundNotify  = "lostfound.notify"
+	PermRequestCreate    = "request.create"
+	PermRequestManage    = "request.manage"
 )
 
 // AllPermissions returns every permission in the catalog. Used for the
@@ -167,6 +169,7 @@ func AllPermissions() []string {
 		PermExportCreate, PermFileUpload,
 		PermLostfoundView, PermLostfoundCreate, PermLostfoundEdit, PermLostfoundResolve,
 		PermLostfoundReopen, PermLostfoundDelete, PermLostfoundNotify,
+		PermRequestCreate, PermRequestManage,
 	}
 }
 
@@ -199,15 +202,18 @@ func DefaultRolePermissions() map[string][]string {
 			PermSignoutReturn, PermSignoutCancel, PermSignoutClose,
 			PermDepartmentManage, PermLocationManage, PermCategoryManage,
 			PermAuditView, PermExportCreate, PermFileUpload,
+			PermRequestCreate, PermRequestManage,
 		},
 		RoleDeptLead: {
 			PermItemView, PermItemDamage, PermItemLose,
 			PermSignoutView, PermSignoutCreate, PermSignoutConfirm,
 			PermSignoutReturn, PermSignoutCancel, PermSignoutClose,
 			PermFileUpload, PermAuditView, PermExportCreate,
+			PermRequestCreate,
 		},
 		RoleVolunteer: {
 			PermItemView, PermSignoutView, PermSignoutCreate, PermSignoutReturn,
+			PermRequestCreate,
 		},
 		RoleReadonly: {
 			PermItemView, PermSignoutView, PermAuditView,

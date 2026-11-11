@@ -40,6 +40,7 @@ export const PERMS = {
   exportCreate: 'export.create',
   accessManage: 'access.manage',
   userManage: 'user.manage',
+  fileUpload: 'file.upload',
   lostfoundView: 'lostfound.view',
   lostfoundCreate: 'lostfound.create',
   lostfoundEdit: 'lostfound.edit',

@@ -36,6 +36,8 @@ the same version. Rebuilds get no entry here.
   show the organisation logo again (as a grayscale image; turn it off per
   print).
 - `/scan?code=<code>` opens the item or Lost & Found report with that code.
+- Item page → Documents: attach, download and delete receipts, invoices,
+  manuals, warranties and other files (up to 50 MB each).
 - Settings → Privacy and notifications: Lost & Found retention, the last
   day of the convention, anonymising inactive staff, the Telegram bot
   switch, overdue-return emails and the SMTP server. While Stash is paired

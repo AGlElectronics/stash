@@ -31,6 +31,7 @@ import { PageContainer, PageHeader } from '@/components/ui/PageHeader';
 import { ItemHistoryTimeline } from '@/components/ItemHistoryTimeline';
 import { ItemActionDialog } from '@/components/ItemActionDialogs';
 import { ItemImagesPanel } from '@/components/ItemImagesPanel';
+import { ItemAttachmentsPanel } from '@/components/ItemAttachmentsPanel';
 import { useCategories, useDepartments, useLocations } from '@/hooks/useReferenceData';
 import { useFileBlobUrl } from '@/hooks/useFileBlobUrl';
 import { buildLocationPathMap } from '@/lib/locationPath';
@@ -406,6 +407,15 @@ export function ItemDetailPage() {
             </CardHeader>
             <CardContent>
               <ItemImagesPanel itemId={id} primaryImageFileID={it.primary_image_file_id} />
+            </CardContent>
+          </Card>
+
+          <Card className="md:col-span-3">
+            <CardHeader>
+              <CardTitle>Documents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ItemAttachmentsPanel itemId={id} />
             </CardContent>
           </Card>
         </div>

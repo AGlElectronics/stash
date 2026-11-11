@@ -6,7 +6,7 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { Layout } from '@/components/Layout';
-import { getUserManager, isOidcAuthMode } from '@/auth/oidc';
+import { ensureUser, isOidcAuthMode } from '@/auth/oidc';
 import { CategoriesPage } from '@/pages/CategoriesPage';
 import { ClaimPage } from '@/pages/ClaimPage';
 import { DashboardPage } from '@/pages/DashboardPage';
@@ -63,19 +63,9 @@ async function requireSession() {
   if (!isOidcAuthMode()) {
     return;
   }
-  const mgr = getUserManager();
-  if (!mgr) {
-    throw redirect({ to: '/login', search: { redirect: '/dashboard' } });
-  }
-  let user = await mgr.getUser();
-  if (user?.expired) {
-    try {
-      user = await mgr.signinSilent();
-    } catch {
-      user = null;
-    }
-  }
-  if (!user) {
+  // Tokens live in memory only, so after a reload this signs in silently.
+  const user = await ensureUser();
+  if (!user || user.expired) {
     const path = typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : '/dashboard';
     const redirectTo = path.startsWith('/login') || path.startsWith('/auth/') ? '/dashboard' : path;
     throw redirect({ to: '/login', search: { redirect: redirectTo } });

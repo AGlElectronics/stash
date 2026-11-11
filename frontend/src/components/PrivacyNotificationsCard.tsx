@@ -43,7 +43,7 @@ export function PrivacyNotificationsCard() {
         <CardTitle>Privacy and notifications</CardTitle>
         <CardDescription>
           How long guest data in Lost &amp; Found is kept, and how Stash reaches people. Values set in
-          Den (Admin → Organisation) override these while Stash is connected.
+          Den (Admin → Module settings) override these while Stash is connected.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5 text-sm">

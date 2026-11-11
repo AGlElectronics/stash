@@ -9,7 +9,20 @@ import { Badge } from '@/components/ui/Badge';
 import { ErrorRow, EmptyRow, LoadingRow } from '@/components/ui/States';
 import { formatDateTime } from '@/lib/utils';
 
-const ENTITY_TYPES = ['', 'item', 'signout', 'department', 'category', 'location', 'user'];
+const ENTITY_TYPES = [
+  '',
+  'item',
+  'signout',
+  'lostfound',
+  'file',
+  'department',
+  'category',
+  'location',
+  'settings',
+  'den',
+  'export',
+  'user',
+];
 
 function formatActor(entry: { actor_display_name?: string; actor_oidc_subject?: string }): string {
   const name = entry.actor_display_name?.trim();

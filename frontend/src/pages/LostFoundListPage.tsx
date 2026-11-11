@@ -21,7 +21,8 @@ import { PageContainer, PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState, ErrorRow, LoadingRow } from '@/components/ui/States';
 import { Tabs } from '@/components/ui/Tabs';
 import { useMe, PERMS } from '@/hooks/useMe';
-import { downloadCsvFile, rowsToCsv } from '@/lib/csvExport';
+import { fetchAuthed } from '@/api/client';
+import { downloadBlob } from '@/lib/csvExport';
 import { formatDateTime, cn } from '@/lib/utils';
 
 type TypeTab = 'all' | LostFoundType;
@@ -60,39 +61,17 @@ export function LostFoundListPage() {
   const countFor = (t: TypeTab) =>
     (t === 'all' ? all : all.filter((r) => r.type === t)).filter((r) => r.status === 'open').length;
 
-  function exportCsv() {
-    const rows: string[][] = [
-      [
-        'Number',
-        'Type',
-        'Status',
-        'Item',
-        'Description',
-        'Location',
-        'Date reported',
-        'Reported by',
-        'Guest contact',
-        'Returned to',
-        'Resolved at',
-        'Resolution note',
-      ],
-      ...all.map((r) => [
-        r.report_number,
-        r.type,
-        r.status,
-        r.item_name,
-        r.description,
-        r.location,
-        r.date_reported,
-        r.reported_by_name ?? '',
-        [r.contact_name, r.contact_info].filter(Boolean).join(' / '),
-        r.returned_to ?? '',
-        r.resolved_at ?? '',
-        r.resolution_note ?? '',
-      ]),
-    ];
+  const [exportError, setExportError] = useState('');
+
+  async function exportCsv() {
+    setExportError('');
+    const res = await fetchAuthed('/api/export/lostfound.csv');
+    if (!res.ok) {
+      setExportError('Export failed. You need the export.create permission.');
+      return;
+    }
     const stamp = new Date().toISOString().slice(0, 10);
-    downloadCsvFile(`lost-and-found-${stamp}.csv`, rowsToCsv(rows));
+    downloadBlob(`lost-and-found-${stamp}.csv`, await res.blob());
   }
 
   return (
@@ -102,7 +81,7 @@ export function LostFoundListPage() {
         description="Report lost or found belongings and track them until they find their way home."
         actions={
           <>
-            {can(PERMS.lostfoundResolve) && all.length > 0 ? (
+            {can(PERMS.exportCreate) && all.length > 0 ? (
               <Button variant="secondary" onClick={exportCsv}>
                 <Download className="w-4 h-4" />
                 Export datasheet
@@ -117,6 +96,11 @@ export function LostFoundListPage() {
           </>
         }
       />
+      {exportError ? (
+        <p role="alert" className="text-sm text-destructive mb-3">
+          {exportError}
+        </p>
+      ) : null}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <Tabs<TypeTab>

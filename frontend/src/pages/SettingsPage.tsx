@@ -5,6 +5,7 @@ import { Activity, History, KeyRound, MapPin, Tags } from 'lucide-react';
 import { ApiError, apiRequest } from '@/api/client';
 import { getSettings, patchSettings } from '@/api/settings';
 import { DenConnection } from '@/components/DenConnection';
+import { PrivacyNotificationsCard } from '@/components/PrivacyNotificationsCard';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -32,6 +33,7 @@ export function SettingsPage() {
       <div className="space-y-5">
         {can(PERMS.accessManage) ? <DenConnection base="/api/den" /> : null}
         <SystemSettingsCard />
+        {can(PERMS.accessManage) ? <PrivacyNotificationsCard /> : null}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {can(PERMS.locationManage) ? (
@@ -148,9 +150,10 @@ function SystemSettingsCard() {
             onChange={(e) => setPreserveSacred(e.target.checked)}
           />
           <span>
-            <span className="font-semibold">Protect sacred lost &amp; found LF-0001</span>
+            <span className="font-semibold">Protect Lost &amp; Found report LF-0001</span>
             <span className="block text-muted-foreground">
-              Opt-in immortal test report. Leave off for reusable deployments.
+              An easter egg: the first report can no longer be edited or removed (retention skips
+              it too). Off by default.
             </span>
           </span>
         </label>
@@ -187,7 +190,7 @@ function SystemSettingsCard() {
             <span className="font-medium">Barcode width</span>
             <input
               type="number"
-              min={1}
+              min={3}
               max={12}
               className="w-full rounded-md border border-border bg-background px-3 py-2"
               value={barcodeWidth}
@@ -255,10 +258,10 @@ function AccessInfoCard() {
           Access control
         </CardTitle>
         <CardDescription>
-          Roles and permissions are managed entirely in configuration, not in this UI. OIDC roles from
-          Keycloak map to Stash permissions via a config file mounted into the backend — edits go through
-          git in the deployment repo and roll out with the next sync. Your own access updates the next
-          time you sign in.
+          Roles are assigned in HR (or directly in Keycloak), not in this UI. Every role is global and
+          appears in HR as <code>stash_&lt;role&gt;</code>, for example <code>stash_volunteer</code>.
+          What each role may do is set in <code>access-config.toml</code> on the backend. Your own
+          access updates the next time your sign-in is renewed.
         </CardDescription>
       </CardHeader>
     </Card>

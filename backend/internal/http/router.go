@@ -81,9 +81,9 @@ func NewRouter(deps Deps, version string) http.Handler {
 	if den == nil {
 		den = denlink.New(deps.Pool, denlink.Config{Slug: "stash", Version: version, Mode: deps.Config.DenMode}, deps.Logger)
 	}
-	settings := &settingsHandler{svc: service.NewSettingsService(deps.Pool).WithDen(den)}
+	settings := &settingsHandler{svc: service.NewSettingsService(deps.Pool).WithDen(service.DenSource(den))}
 
-	publicLF := &publicLostFoundHandler{pool: deps.Pool, files: deps.Files}
+	publicLF := &publicLostFoundHandler{pool: deps.Pool}
 
 	r.Route("/api", func(api chi.Router) {
 		api.Use(den.RequirePaired)
@@ -96,7 +96,6 @@ func NewRouter(deps Deps, version string) http.Handler {
 		if deps.Config.PublicLostFoundClaimEnabled {
 			api.Route("/public/lostfound", func(pub chi.Router) {
 				pub.Get("/", publicLF.search)
-				pub.Get("/{reportNumber}/photo", publicLF.photo)
 				pub.Get("/{reportNumber}", publicLF.getByNumber)
 			})
 		}
@@ -158,14 +157,15 @@ func NewRouter(deps Deps, version string) http.Handler {
 				g.Patch("/settings", settings.patch)
 				g.Route("/den", func(dr chi.Router) {
 					dr.Get("/", den.StatusHandler)
-					dr.Post("/pair", den.PairHandler)
-					dr.Post("/sync", den.SyncHandler)
-					dr.Delete("/pair", den.UnpairHandler)
+					dr.Post("/pair", auditDen(deps.Pool, den, "den.pair", den.PairHandler))
+					dr.Post("/sync", auditDen(deps.Pool, den, "den.sync", den.SyncHandler))
+					dr.Delete("/pair", auditDen(deps.Pool, den, "den.unpair", den.UnpairHandler))
 				})
 			})
 			secure.Route("/audit-log", auditLogHandler(deps.Pool))
 			secure.Get("/export/items.csv", exportItemsCSV(deps.Pool))
 			secure.Get("/export/signouts.csv", exportSignoutsCSV(deps.Pool))
+			secure.Get("/export/lostfound.csv", exportLostFoundCSV(deps.Pool))
 			secure.Route("/files", fileH.routes)
 		})
 	})

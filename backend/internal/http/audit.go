@@ -2,14 +2,20 @@ package http
 
 import (
 	"encoding/csv"
+	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/hlog"
 
+	"github.com/AGlElectronics/stash/backend/internal/audit"
 	"github.com/AGlElectronics/stash/backend/internal/auth"
 	"github.com/AGlElectronics/stash/backend/internal/domain"
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
@@ -22,16 +28,28 @@ func auditLogHandler(pool *pgxpool.Pool) func(chi.Router) {
 	}
 }
 
+// clampPage keeps limit within 1..max and offset at 0 or more.
+func clampPage(limit, offset, max int32) (int32, int32) {
+	if limit <= 0 {
+		limit = 1
+	}
+	if limit > max {
+		limit = max
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
+}
+
 func listAuditLog(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := auth.Require(r.Context(), domain.PermAuditView); err != nil {
 			httperror.Render(w, r, err)
 			return
 		}
-		params := sqlcgen.ListAuditLogParams{
-			Lim: queryInt(r, "limit", 100),
-			Off: queryInt(r, "offset", 0),
-		}
+		lim, off := clampPage(queryInt(r, "limit", 100), queryInt(r, "offset", 0), 500)
+		params := sqlcgen.ListAuditLogParams{Lim: lim, Off: off}
 		if v, err := queryUUID(r, "actor"); err != nil {
 			httperror.Render(w, r, err)
 			return
@@ -57,8 +75,18 @@ func listAuditLog(pool *pgxpool.Pool) http.HandlerFunc {
 			httperror.Render(w, r, httperror.Internal(err))
 			return
 		}
+		// Guest personal data from Lost & Found stays hidden from people who
+		// cannot see Lost & Found reports themselves.
+		canSeeGuests := auth.HasPermission(r.Context(), domain.PermLostfoundView)
 		out := make([]map[string]any, 0, len(rows))
 		for _, a := range rows {
+			if !canSeeGuests && audit.HasGuestData(a.EntityType, a.BeforeJson, a.AfterJson) {
+				a.BeforeJson = audit.RedactGuestData(a.BeforeJson)
+				a.AfterJson = audit.RedactGuestData(a.AfterJson)
+				if a.EntityType == "lostfound" && a.Note != "" {
+					a.Note = audit.Redacted
+				}
+			}
 			out = append(out, map[string]any{
 				"id":                 a.ID.String(),
 				"actor_user_id":      uuidPtrToString2(a.ActorUserID),
@@ -67,13 +95,62 @@ func listAuditLog(pool *pgxpool.Pool) http.HandlerFunc {
 				"action":             a.Action,
 				"entity_type":        a.EntityType,
 				"entity_id":          a.EntityID.String(),
-				"before":             a.BeforeJson,
-				"after":              a.AfterJson,
+				"before":             rawJSON(a.BeforeJson),
+				"after":              rawJSON(a.AfterJson),
 				"note":               a.Note,
 				"created_at":         timestampString(a.CreatedAt),
 			})
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"items": out})
+		writeJSON(w, http.StatusOK, map[string]any{"items": out, "limit": lim, "offset": off})
+	}
+}
+
+// rawJSON returns a stored JSONB snapshot as JSON (not base64), or null.
+func rawJSON(b []byte) json.RawMessage {
+	if len(b) == 0 {
+		return json.RawMessage("null")
+	}
+	return json.RawMessage(b)
+}
+
+// csvSafe neutralises spreadsheet formulas: a text cell starting with
+// = + - @ or a tab/carriage return gets a leading apostrophe so Excel and
+// LibreOffice show it as text. Plain numbers are left alone.
+func csvSafe(s string) string {
+	if s == "" {
+		return s
+	}
+	switch s[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		if _, err := strconv.ParseFloat(s, 64); err == nil {
+			return s
+		}
+		return "'" + s
+	}
+	return s
+}
+
+// safeCSV writes CSV rows with every cell passed through csvSafe.
+type safeCSV struct{ *csv.Writer }
+
+func newSafeCSV(w io.Writer) safeCSV { return safeCSV{csv.NewWriter(w)} }
+
+func (c safeCSV) Write(row []string) error {
+	out := make([]string, len(row))
+	for i, v := range row {
+		out[i] = csvSafe(v)
+	}
+	return c.Writer.Write(out)
+}
+
+// auditExport records who downloaded which export.
+func auditExport(r *http.Request, pool *pgxpool.Pool, action string, rows int, filters string) {
+	note := fmt.Sprintf("%d rows", rows)
+	if filters != "" {
+		note += "; " + filters
+	}
+	if err := audit.Record(r.Context(), sqlcgen.New(pool), action, "export", uuid.Nil, nil, nil, note); err != nil {
+		hlog.FromRequest(r).Error().Err(err).Str("action", action).Msg("audit export")
 	}
 }
 
@@ -160,9 +237,14 @@ func exportItemsCSV(pool *pgxpool.Pool) http.HandlerFunc {
 			itemName[pid] = row.Name
 		}
 
+		filters := ""
+		if parentContainerID != nil {
+			filters = "parent_container_id=" + parentContainerID.String()
+		}
+		auditExport(r, pool, "export.items", len(rows), filters)
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="items-`+time.Now().Format("20060102")+`.csv"`)
-		cw := csv.NewWriter(w)
+		cw := newSafeCSV(w)
 		_ = cw.Write([]string{
 			"id", "name", "type", "status", "condition",
 			"quantity_owned", "quantity_damaged", "quantity_lost",
@@ -220,6 +302,44 @@ func deptLookup(m map[uuid.UUID]string, id *uuid.UUID) string {
 	return m[*id]
 }
 
+// exportLostFoundCSV streams the Lost & Found datasheet: every report that
+// has not been removed, including guest contact details. It needs both
+// export.create and lostfound.view, and every download is audited.
+func exportLostFoundCSV(pool *pgxpool.Pool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := auth.Require(r.Context(), domain.PermExportCreate); err != nil {
+			httperror.Render(w, r, err)
+			return
+		}
+		if err := auth.Require(r.Context(), domain.PermLostfoundView); err != nil {
+			httperror.Render(w, r, err)
+			return
+		}
+		rows, err := sqlcgen.New(pool).ListLostFoundReports(r.Context(), sqlcgen.ListLostFoundReportsParams{Lim: 100000})
+		if err != nil {
+			httperror.Render(w, r, httperror.Internal(err))
+			return
+		}
+		auditExport(r, pool, "export.lostfound", len(rows), "")
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="lost-and-found-`+time.Now().Format("20060102")+`.csv"`)
+		_, _ = io.WriteString(w, "\ufeff")
+		cw := newSafeCSV(w)
+		_ = cw.Write([]string{
+			"report_number", "type", "status", "item_name", "description", "location",
+			"date_reported", "contact_name", "contact_info", "returned_to", "resolved_at", "resolution_note",
+		})
+		for _, rep := range rows {
+			_ = cw.Write([]string{
+				rep.ReportNumber, rep.Type, rep.Status, rep.ItemName, rep.Description, rep.Location,
+				timestampString(rep.DateReported), rep.ContactName, rep.ContactInfo, rep.ReturnedTo,
+				timestampString(rep.ResolvedAt), rep.ResolutionNote,
+			})
+		}
+		cw.Flush()
+	}
+}
+
 // exportSignoutsCSV streams a CSV of all sign-outs.
 func exportSignoutsCSV(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -236,9 +356,10 @@ func exportSignoutsCSV(pool *pgxpool.Pool) http.HandlerFunc {
 			httperror.Render(w, r, httperror.Internal(err))
 			return
 		}
+		auditExport(r, pool, "export.signouts", len(rows), "")
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="signouts-`+time.Now().Format("20060102")+`.csv"`)
-		cw := csv.NewWriter(w)
+		cw := newSafeCSV(w)
 		_ = cw.Write([]string{
 			"signout_number", "status", "to_department_id", "from_department_id",
 			"received_by_name", "purpose", "signed_out_at", "returned_at", "closed_at", "cancelled_at",

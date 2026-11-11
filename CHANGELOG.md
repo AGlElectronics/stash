@@ -30,6 +30,24 @@ the same version. Rebuilds get no entry here.
   role once as `stash_<role>` (for example `stash_volunteer`), and a
   Keycloak group with exactly that name grants the role without a
   binding. `GET /api/me` returns `roles` (catalog keys) and `permissions`.
+- Settings → Privacy and notifications: Lost & Found retention, the last
+  day of the convention, anonymising inactive staff, the Telegram bot
+  switch, overdue-return emails and the SMTP server. While Stash is paired
+  with Den, Den's organisation settings `stash_con_end_date`,
+  `stash_lostfound_retention_mode`, `stash_lostfound_retention_days`,
+  `stash_lostfound_retention_hours`, `stash_smtp_host`, `stash_smtp_port`,
+  `stash_smtp_username`, `stash_smtp_from` and `stash_smtp_tls` override
+  the values here and are shown as "Managed in Den".
+- `GET /api/export/lostfound.csv`: the Lost & Found datasheet, built on the
+  server. It needs `export.create` and `lostfound.view`; the button on the
+  Lost & Found page now shows for people with `export.create`.
+- The audit log records settings changes (`settings.update`), Den
+  pair/sync/unpair (`den.pair`, `den.sync`, `den.unpair`) and every CSV
+  export (`export.items`, `export.signouts`, `export.lostfound`). Its
+  entity filter now offers `lostfound`, `file`, `settings`, `den` and
+  `export`.
+- Settings: protecting report LF-0001 from edits and removal is an easter
+  egg that stays off unless an admin turns it on.
 - Dev sign-in (`AUTH_MODE=dev`) can use roles other than admin:
   `X-Dev-User: bob:volunteer` or `bob:frontdesk,readonly`. A plain name is
   still an admin.
@@ -99,6 +117,24 @@ the same version. Rebuilds get no entry here.
 - Uploads larger than 51 MiB are refused with `413 payload_too_large`
   before they are read.
 - A Lost & Found report's photo must be a photo uploaded to that report.
+- `PATCH /api/settings` rejects unknown keys and invalid values with
+  `422 validation_failed` and a message per key in `details`.
+- The audit log hides guest names, contact details, notes and photo
+  filenames from Lost & Found entries for people without
+  `lostfound.view`. `limit` is capped at 500 and a negative `offset`
+  counts as 0.
+- CSV exports (server and browser) put an apostrophe in front of text
+  starting with `=`, `+`, `-`, `@`, a tab or a carriage return, so a
+  spreadsheet does not run it as a formula.
+- The public claim page (`/api/public/lostfound`) only shows the report
+  number, item name and the day it was reported. Description, location
+  and photo are no longer public (the photo route is gone), and search
+  matches item names only.
+
+### Fixed
+
+- `GET /api/audit-log` returns `before` and `after` as JSON objects
+  instead of base64 strings.
 - The backend reads the client address from `X-Forwarded-For` only when
   the connection comes from a trusted proxy (`TRUSTED_PROXY_CIDRS`), and
   ignores `X-Real-IP` and `True-Client-IP`.

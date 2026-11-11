@@ -8,13 +8,12 @@ const apiBaseUrl = () =>
   (typeof process !== 'undefined' ? process.env.STASH_API_BASE_URL : undefined) ??
   runtimeConfig().apiBaseUrl;
 
+/** What guests may see: no description, location or photo. */
 export type PublicLostFoundReport = {
   report_number: string;
   item_name: string;
-  description: string;
-  location: string;
+  /** Day only, YYYY-MM-DD. */
   date_reported: string;
-  photo_url?: string;
 };
 
 export async function getPublicReport(reportNumber: string): Promise<PublicLostFoundReport> {

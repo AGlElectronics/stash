@@ -1,7 +1,7 @@
 package http
 
 import (
-	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 
@@ -24,17 +24,18 @@ func (h *settingsHandler) get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// patch merges a partial JSON object into system settings. Gated by
-// access.manage at the router level, so only admins can flip toggles.
+// patch validates and merges a partial JSON object into system settings.
+// Gated by access.manage at the router level.
 func (h *settingsHandler) patch(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))
 	if err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			httperror.Render(w, r, httperror.BadRequest("settings patch is larger than 64 KiB"))
+			return
+		}
 		httperror.Render(w, r, httperror.BadRequest("could not read body"))
-		return
-	}
-	if !json.Valid(raw) {
-		httperror.Render(w, r, httperror.BadRequest("invalid JSON"))
 		return
 	}
 	out, err := h.svc.PatchJSON(r.Context(), raw)

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import { HandHeart, MapPin, PackageOpen, Search } from 'lucide-react';
+import { HandHeart, PackageOpen, Search } from 'lucide-react';
 import {
   getPublicReport,
   searchPublicReports,
@@ -122,7 +122,8 @@ function ClaimBrowse() {
         <div className="text-center space-y-2 max-w-2xl mx-auto">
           <h2 className="text-xl font-semibold">Find your item</h2>
           <p className="text-sm text-muted-foreground">
-            Browse everything turned in below, or search by name or description.
+            Browse everything turned in below, or search by item name. To claim it, describe it at
+            the desk.
           </p>
         </div>
 
@@ -238,29 +239,6 @@ function ReportCard({ report, compact }: { report: PublicLostFoundReport; compac
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {report.photo_url ? (
-          <img
-            src={report.photo_url}
-            alt={report.item_name}
-            className="max-h-48 rounded-lg border border-border object-contain w-full bg-muted/20"
-            loading="lazy"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-        ) : null}
-
-        {report.description ? (
-          <p className={compact ? 'text-xs line-clamp-3' : 'text-sm'}>{report.description}</p>
-        ) : null}
-
-        {report.location ? (
-          <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
-            <MapPin className="w-3.5 h-3.5 shrink-0" />
-            Found at: {report.location}
-          </p>
-        ) : null}
-
         {report.date_reported ? (
           <p className="text-xs text-muted-foreground">
             Reported: {new Date(report.date_reported).toLocaleDateString()}

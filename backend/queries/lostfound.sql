@@ -81,20 +81,19 @@ RETURNING *;
 SELECT count(*) FROM lost_found_reports WHERE status = 'open' AND removed_at IS NULL;
 
 -- name: GetPublicLostFoundByNumber :one
--- Public endpoint: only returns found+open reports for guest claim lookup.
-SELECT id, report_number, item_name, description, photo_file_id, location, date_reported
+-- Public endpoint: only open "found" reports, only the fields a guest sees.
+SELECT report_number, item_name, date_reported
 FROM lost_found_reports
 WHERE report_number = $1 AND type = 'found' AND status = 'open' AND removed_at IS NULL;
 
 -- name: SearchPublicLostFound :many
--- Public search: returns open "found" reports matching a text query.
-SELECT id, report_number, item_name, description, photo_file_id, location, date_reported
+-- Public search: open "found" reports whose item name matches. Description
+-- and location are not searched so they cannot be probed.
+SELECT report_number, item_name, date_reported
 FROM lost_found_reports
 WHERE type = 'found' AND status = 'open' AND removed_at IS NULL
   AND (sqlc.narg('search')::text IS NULL OR sqlc.narg('search') = '' OR
-       lower(item_name)   LIKE '%' || lower(sqlc.narg('search')::text) || '%' OR
-       lower(description) LIKE '%' || lower(sqlc.narg('search')::text) || '%' OR
-       lower(location)    LIKE '%' || lower(sqlc.narg('search')::text) || '%')
+       lower(item_name) LIKE '%' || lower(sqlc.narg('search')::text) || '%')
 ORDER BY date_reported DESC, id DESC
 LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 
@@ -102,6 +101,4 @@ LIMIT sqlc.arg('lim') OFFSET sqlc.arg('off');
 SELECT count(*) FROM lost_found_reports
 WHERE type = 'found' AND status = 'open' AND removed_at IS NULL
   AND (sqlc.narg('search')::text IS NULL OR sqlc.narg('search') = '' OR
-       lower(item_name)   LIKE '%' || lower(sqlc.narg('search')::text) || '%' OR
-       lower(description) LIKE '%' || lower(sqlc.narg('search')::text) || '%' OR
-       lower(location)    LIKE '%' || lower(sqlc.narg('search')::text) || '%');
+       lower(item_name) LIKE '%' || lower(sqlc.narg('search')::text) || '%');

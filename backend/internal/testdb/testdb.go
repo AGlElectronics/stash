@@ -68,13 +68,29 @@ func New(t testing.TB) *pgxpool.Pool {
 	}
 	t.Cleanup(pool.Close)
 
-	migrateMu.Lock()
-	err = db.MigrateUp(ctx, pool)
-	migrateMu.Unlock()
-	if err != nil {
+	if err := migrate(ctx, admin, pool); err != nil {
 		t.Fatalf("testdb: migrate: %v", err)
 	}
 	return pool
+}
+
+// migrate runs the migrations while holding an advisory lock, because test
+// packages run as parallel processes and CREATE EXTENSION is not safe to
+// run concurrently.
+func migrate(ctx context.Context, admin, pool *pgxpool.Pool) error {
+	migrateMu.Lock()
+	defer migrateMu.Unlock()
+	conn, err := admin.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+	const lockKey = 0x57a5_7e57
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", lockKey); err != nil {
+		return err
+	}
+	defer func() { _, _ = conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", lockKey) }()
+	return db.MigrateUp(ctx, pool)
 }
 
 func withSearchPath(t testing.TB, dsn, schema string) string {

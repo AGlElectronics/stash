@@ -28,8 +28,33 @@ the same version. Rebuilds get no entry here.
   per-item history and CSV exports. Roles are global: a department lead
   handles every department's gear. `GET /api/role-catalog` lists each
   role once as `stash_<role>` (for example `stash_volunteer`), and a
-  Keycloak group with exactly that name grants the role without a
-  binding. `GET /api/me` returns `roles` (catalog keys) and `permissions`.
+  Keycloak group with that name grants the role without a binding.
+  `GET /api/me` returns `roles` (catalog keys) and `permissions`.
+- `GET /api/role-catalog` follows the role catalog contract 1.0: HR reads
+  it with `HR_SERVICE_TOKEN` as a Bearer token (32 characters or more;
+  staff can read it signed in), and it has `revision` with an `ETag`
+  (`If-None-Match` answers `304`), `group_display`, `dynamic` and
+  `privileged: true` for roles that can manage access or people, or export
+  data (`admin`, `inventory_manager`, `dept_lead`, `conops_lead`). It is rate limited (`429 rate_limited` with `Retry-After`).
+- Group matching settings: `OIDC_GROUPS_CLAIM` (default `groups`),
+  `OIDC_GROUP_MATCH` (`full` or `last`) and `OIDC_GROUP_PREFIX` (a parent
+  group such as `/con2026` removed before matching). Names are compared
+  case-insensitively, ignoring one leading `/`.
+- Stash uses the shared Con Services code (`groupmatch`, `denlink`,
+  `authbase`, copied from `con-services` `shared/go` with
+  `scripts/sync-shared`). See
+  [Shared code](https://aglelectronics.github.io/con-services/concepts/shared-code/).
+- When Den rejects Stash's credential (Stash was removed in Den, or the
+  credential revoked), Stash marks the link **revoked** and keeps it so
+  across restarts. `GET /api/den/state` and `GET /api/den/` report
+  `"revoked": true`, `POST /api/den/sync` answers
+  `409 den_credential_revoked`, and admins see "Den rejected this module's
+  credential" with a form to pair again. Stash never pairs again by
+  itself; pairing again clears the state. The migration
+  `20261112000001_den_link_revoked` adds the column.
+- Pairing URLs may only point at Den's host: `DEN_INTERNAL_URL` (set on
+  Kubernetes) or the hosts in `DEN_ALLOWED_HOSTS`, over `https://` outside
+  development.
 - QR labels: the item label page can print a QR code instead of a barcode.
   It holds a link to `/scan?code=<code>`, so any phone camera opens the
   item in Stash; the in-app scanner (camera or USB) reads it too. Labels
@@ -64,11 +89,12 @@ the same version. Rebuilds get no entry here.
 - Settings → Privacy and notifications: Lost & Found retention, the last
   day of the convention, anonymising inactive staff, the Telegram bot
   switch, overdue-return emails and the SMTP server. While Stash is paired
-  with Den, Den's organisation settings `stash_con_end_date`,
-  `stash_lostfound_retention_mode`, `stash_lostfound_retention_days`,
-  `stash_lostfound_retention_hours`, `stash_smtp_host`, `stash_smtp_port`,
-  `stash_smtp_username`, `stash_smtp_from` and `stash_smtp_tls` override
-  the values here and are shown as "Managed in Den".
+  with Den, Den's module settings (Den → Admin → Module settings) override
+  the values here and are shown as "Managed in Den": `stash.lost_found`
+  (`kept_after_con` with `days`, default 30, or `deleted_after_closing`
+  with `hours`, default 48), `retention.inactive_users_days` and the SMTP
+  server (`smtp.host`, `port`, `username`, `security`, `from`,
+  `from_name`). The last day of the convention stays a Stash setting.
 - `GET /api/export/lostfound.csv`: the Lost & Found datasheet, built on the
   server. It needs `export.create` and `lostfound.view`; the button on the
   Lost & Found page now shows for people with `export.create`.
@@ -115,7 +141,7 @@ the same version. Rebuilds get no entry here.
 - `DEN_MODE=required` keeps the module locked until it is paired with Den:
   the API answers `503 den_pairing_required` (except health, brand, sign-in
   and the Den connection routes) and the public `GET /api/den/state`
-  reports `{"mode","paired"}`. The default `standalone` runs without Den;
+  reports `{"mode","paired","revoked"}`. The default `standalone` runs without Den;
   any other value stops the backend at startup.
 - The web app shows a "Connect this module to Den" page (admins) or
   "Waiting for Den" (everyone else) while the backend runs with
@@ -167,6 +193,65 @@ the same version. Rebuilds get no entry here.
 - CI on every pull request (tests, lint, Trivy scans) and signed images with
   an SBOM published to GHCR on version tags (linux/amd64; linux/arm64
   optional).
+
+### Changed
+
+These matter if you ran a pre-release build of Stash.
+
+- **BREAKING:** the backend accepts only **access tokens** whose audience
+  (`aud`) contains `OIDC_AUDIENCE`, now `stash-api` by default; ID tokens
+  are refused. The web app sends the access token. Before upgrading, add
+  the audience mapper `stash-api` to the `stash-spa` client in Keycloak
+  (new realms from `con-services` have it), and set
+  `OIDC_AUDIENCE=stash-api` or remove the setting. See
+  [Audiences per API](https://aglelectronics.github.io/con-services/concepts/authentication/#audiences-per-api).
+- **BREAKING:** groups come only from the claim named by
+  `OIDC_GROUPS_CLAIM`; Keycloak `roles` are no longer merged in. Give
+  people their Stash roles through groups (`stash_<role>` or a binding in
+  `access-config.toml`).
+- **BREAKING:** `AUTH_MODE` now defaults to `oidc` and `APP_ENV` to
+  `production`, and `AUTH_MODE=dev` is refused unless
+  `APP_ENV=development`. A development setup that relied on the old
+  defaults sets both explicitly (`.env.example` and the Compose files do).
+- **BREAKING:** the stored Den credential is encrypted (AES-256-GCM) with
+  `DEN_LINK_ENCRYPTION_KEY` (32 random bytes, base64; one key per
+  installation). Outside `APP_ENV=development` the backend refuses to start
+  without it. Add it to `stash-secrets` before upgrading; an existing
+  plaintext credential is encrypted on its first read, so no re-pairing is
+  needed. Rotate with `DEN_LINK_ENCRYPTION_KEY_PREVIOUS`. See
+  [Secrets](https://aglelectronics.github.io/con-services/operations/secrets/#den-link-encryption-key).
+- **BREAKING:** `GET /api/role-catalog` needs `HR_SERVICE_TOKEN` as a
+  Bearer token or a staff sign-in (it was public). Give HR the same
+  `HR_SERVICE_TOKEN`. `scope` is now `organization`.
+- **BREAKING:** Den's organisation settings `stash_con_end_date`,
+  `stash_lostfound_retention_*` and `stash_smtp_*` are no longer read.
+  Set the same values in Den → Admin → Module settings (Lost & Found
+  retention, inactive users, SMTP), and the last day of the convention in
+  Stash → Settings.
+- The web app keeps sign-in tokens in memory only, no longer in
+  `localStorage`. After a reload it signs in again silently through the
+  Keycloak session; a sign-out or another person signing in in another
+  tab still reaches every tab through the session monitor.
+- Request bodies are limited to 1 MiB (settings to 64 KiB; uploads keep
+  their own limit); a larger one is refused with `413 request_too_large`.
+- API responses carry `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: no-referrer`, `X-Frame-Options: DENY` and
+  `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`,
+  and CORS exposes `X-Request-ID`. Outside dev sign-in the backend drops
+  `X-Dev-User` and `X-Dev-Groups` from every request, and CORS allows them
+  only in dev sign-in.
+- The public Lost & Found lookup is rate limited per client address
+  (`429 rate_limited` with `Retry-After`); the client address comes from
+  `X-Forwarded-For` only behind a proxy in `TRUSTED_PROXY_CIDRS`.
+- The web app's nginx sends a Content Security Policy and the other browser
+  security headers from `con-services` `shared/nginx` (not on `/api/`),
+  with `camera=(self)` for barcode scanning. Set `KEYCLOAK_ORIGIN` on the
+  web app container to the sign-in server (for example
+  `https://auth.con.example.org`), or the browser blocks sign-in;
+  `DEN_ORIGIN`, `S3_ORIGIN` and `EXTRA_CONNECT_SRC` are optional. The
+  inline scripts of `index.html` and `silent-callback.html` moved into
+  `theme-init.js` and `silent-callback.js`. See
+  [Nginx security headers](https://aglelectronics.github.io/con-services/concepts/shared-code/#nginx-security-headers).
 
 ### Security
 

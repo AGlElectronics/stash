@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"slices"
@@ -91,6 +92,59 @@ func TestSettingsPatchValidatesAndAudits(t *testing.T) {
 		if !errors.As(err, &he) || (he.Code != httperror.CodeValidation && he.Code != httperror.CodeBadRequest) {
 			t.Errorf("%s: want 422/400, got %v", body, err)
 		}
+	}
+}
+
+func TestSMTPPasswordFollowsDen(t *testing.T) {
+	ctx := context.Background()
+	const (
+		withPassword = `{"data":{"smtp":{"host":"smtp.example.org","password_set":true,"from":"stash@con.example.org"}}}`
+		noPassword   = `{"data":{"smtp":{"host":"smtp.example.org","from":"stash@con.example.org"}}}`
+		noSMTP       = `{"data":{"stash":{"lost_found":{"mode":"kept_after_con","days":7}}}}`
+	)
+	var calls int
+	fetch := func(context.Context) (string, error) {
+		calls++
+		return "from-den", nil
+	}
+	svc := &SettingsService{den: fakeDen{paired: true, module: withPassword}}
+	got, err := svc.SMTPPassword(ctx, fetch, "env-secret")
+	if err != nil || got != "from-den" || calls != 1 {
+		t.Fatalf("den password: %q %v calls=%d", got, err, calls)
+	}
+
+	calls = 0
+	svc.den = fakeDen{paired: true, module: noPassword}
+	got, err = svc.SMTPPassword(ctx, fetch, "env-secret")
+	if err != nil || got != "" || calls != 0 {
+		t.Fatalf("den server without a password must not use SMTP_PASSWORD: %q %v calls=%d", got, err, calls)
+	}
+
+	svc.den = fakeDen{paired: true, module: noSMTP}
+	got, err = svc.SMTPPassword(ctx, fetch, "env-secret")
+	if err != nil || got != "env-secret" || calls != 0 {
+		t.Fatalf("no den smtp: %q %v calls=%d", got, err, calls)
+	}
+
+	svc.den = fakeDen{paired: false, module: withPassword}
+	got, err = svc.SMTPPassword(ctx, fetch, "env-secret")
+	if err != nil || got != "env-secret" || calls != 0 {
+		t.Fatalf("standalone keeps SMTP_PASSWORD: %q %v calls=%d", got, err, calls)
+	}
+
+	svc.den = fakeDen{paired: true, module: withPassword}
+	_, err = svc.SMTPPassword(ctx, nil, "env-secret")
+	if err == nil {
+		t.Fatal("missing fetch while Den holds a password")
+	}
+	_, err = svc.SMTPPassword(ctx, func(context.Context) (string, error) {
+		return "", denlink.ErrRevoked
+	}, "env-secret")
+	if !errors.Is(err, denlink.ErrRevoked) {
+		t.Fatalf("revoked: %v", err)
+	}
+	if denlink.UserMessage(err) == err.Error() || denlink.UserMessage(err) == "" {
+		t.Fatalf("admin sentence %q, go error %q", denlink.UserMessage(err), err.Error())
 	}
 }
 

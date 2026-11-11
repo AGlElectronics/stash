@@ -117,7 +117,8 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 		bot = telegram.New(cfg.TelegramBotToken, cfg.TelegramAPIURL)
 	}
 	lfBot := service.NewLostFoundTelegram(pool, settings, bot, logger)
-	overdue := service.NewOverdueService(pool, settings, mail.SMTP{}, cfg.SMTPPassword, cfg.AppBaseURL, logger)
+	overdue := service.NewOverdueService(pool, settings, mail.SMTP{}, cfg.SMTPPassword, cfg.AppBaseURL, logger).
+		WithDenPassword(den.SMTPPassword)
 	if cfg.JobsEnabled {
 		go jobs.NewLeader(pool, logger, backgroundJobs(pool, settings, filesSvc, overdue, logger), lfBot.Run).Run(ctx)
 	}

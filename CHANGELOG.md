@@ -198,6 +198,11 @@ the same version. Rebuilds get no entry here.
 
 These matter if you ran a pre-release build of Stash.
 
+- Overdue reminder emails use Den's SMTP password when Den sets
+  `smtp.host` and `smtp.password_set`. Stash fetches it when it sends and
+  does not store it. `SMTP_PASSWORD` is used only when Den does not set a
+  mail server. When Den sets the server and holds no password, the message
+  is sent with no password.
 - The shared `denlink` copy can fetch a module-setting secret from Den,
   list the organisation's paired modules, and check a call Den makes into
   Stash. Den errors in the log now start with a lowercase letter. The

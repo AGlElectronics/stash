@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/AGlElectronics/stash/backend/internal/auth"
+	"github.com/AGlElectronics/stash/backend/internal/denlink"
 	"github.com/AGlElectronics/stash/backend/internal/mail"
 	"github.com/AGlElectronics/stash/backend/internal/testdb"
 )
@@ -77,5 +79,77 @@ func TestOverdueRemindersOncePerDay(t *testing.T) {
 	}
 	if c := countRows(t, pool, `SELECT count(*) FROM audit_log WHERE action = 'signout.overdue_reminder'`); c != 2 {
 		t.Fatalf("reminder audit rows = %d, want 2", c)
+	}
+}
+
+type recordingSender struct {
+	cfgs []mail.Config
+	sent []mail.Message
+}
+
+func (r *recordingSender) Send(_ context.Context, cfg mail.Config, m mail.Message) error {
+	r.cfgs = append(r.cfgs, cfg)
+	r.sent = append(r.sent, m)
+	return nil
+}
+
+func TestOverdueMailUsesDenPassword(t *testing.T) {
+	f := newSignoutFixture(t)
+	pool := f.pool
+	receiver := testdb.Actor(t, pool, "Robin")
+	ru, _ := auth.FromContext(receiver)
+	if _, err := pool.Exec(context.Background(), `UPDATE users SET email = 'robin@example.org' WHERE id = $1`, ru.ID); err != nil {
+		t.Fatal(err)
+	}
+	item := mustItem(t, pool, "Radio", 5)
+	due := time.Now().Add(-2 * time.Hour)
+	if _, err := f.svc.Create(f.ctx, CreateSignoutInput{
+		ToDepartmentID: f.dept, ExpectedReturnAt: &due, ReceivedByUserID: &ru.ID, ReceivedByName: "Robin",
+		Items: []SignoutItemInput{line(item.ID, 1)}, Confirm: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := NewSettingsService(pool).WithDen(fakeDen{paired: true, module: `{
+		"data": {"smtp": {"host": "den-smtp.example.org", "port": 2525, "username": "den",
+			"password_set": true, "security": "starttls",
+			"from": "stash@con.example.org", "from_name": "Stash"}}
+	}`})
+	if _, err := settings.PatchJSON(f.ctx, []byte(`{"overdue_email_enabled":true,"smtp_host":"local.example.org","smtp_from":"local@example.org","overdue_notify_emails":"logistics@example.org"}`)); err != nil {
+		t.Fatal(err)
+	}
+	sender := &recordingSender{}
+	var calls int
+	svc := NewOverdueService(pool, settings, sender, "env-secret", "https://stash.example.org", zerolog.Nop()).
+		WithDenPassword(func(context.Context) (string, error) {
+			calls++
+			if calls == 1 {
+				return "", denlink.ErrRevoked
+			}
+			return "from-den", nil
+		})
+
+	n, err := svc.SendReminders(context.Background(), time.Now())
+	if !errors.Is(err, denlink.ErrRevoked) || n != 0 || len(sender.sent) != 0 {
+		t.Fatalf("revoked fetch: n=%d err=%v sent=%d", n, err, len(sender.sent))
+	}
+	if denlink.UserMessage(err) == err.Error() {
+		t.Fatalf("admin sentence collapsed into the Go error: %q", err.Error())
+	}
+	if c := countRows(t, pool, `SELECT count(*) FROM audit_log WHERE action = 'signout.overdue_reminder'`); c != 0 {
+		t.Fatalf("a failed password fetch must not count as a reminder, rows=%d", c)
+	}
+
+	n, err = svc.SendReminders(context.Background(), time.Now())
+	if err != nil || n != 1 || len(sender.cfgs) != 2 {
+		t.Fatalf("send: n=%d err=%v cfgs=%d", n, err, len(sender.cfgs))
+	}
+	for _, cfg := range sender.cfgs {
+		if cfg.Host != "den-smtp.example.org" || cfg.Port != 2525 || cfg.Username != "den" || cfg.Password != "from-den" {
+			t.Fatalf("mail used %+v, want Den's server and password", cfg)
+		}
+		if cfg.Password == "env-secret" || !strings.Contains(cfg.From, "stash@con.example.org") {
+			t.Fatalf("from/password: %+v", cfg)
+		}
 	}
 }

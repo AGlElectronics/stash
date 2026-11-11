@@ -147,6 +147,8 @@ const (
 //	smtp.from, smtp.from_name           smtp_from ("Name <address>")
 //
 // Keys Den does not set are left out; Stash then uses its own value.
+// The SMTP password is not a setting: the bundle only says password_set.
+// denSMTPPassword fetches it when mail is sent.
 func denValues(ms *denlink.ModuleSettings) map[string]any {
 	out := map[string]any{}
 	var lf struct {
@@ -188,6 +190,29 @@ func intOr(p *int, def int) int {
 	return *p
 }
 
+// denSMTPPassword is the password for one send.
+//
+// When Den sets smtp.host and password_set, fetch is called (the Den
+// client's SMTPPassword) and its result is the password, including an
+// empty string when Den's answer has none. When Den sets smtp.host and
+// holds no password, the password is empty: Stash does not send
+// SMTP_PASSWORD to Den's server. When Den does not provide SMTP
+// (standalone, or smtp.host unset), envPassword (SMTP_PASSWORD) is used.
+// A nil fetch while Den holds a password is an error.
+func denSMTPPassword(ctx context.Context, ms *denlink.ModuleSettings, fetch func(context.Context) (string, error), envPassword string) (string, error) {
+	smtp, ok := ms.SMTP()
+	if !ok {
+		return envPassword, nil
+	}
+	if !smtp.PasswordSet {
+		return "", nil
+	}
+	if fetch == nil {
+		return "", errors.New("den holds the smtp password, but stash cannot fetch it")
+	}
+	return fetch(ctx)
+}
+
 type SettingsService struct {
 	pool *pgxpool.Pool
 	den  SettingsSource
@@ -204,6 +229,17 @@ func (s *SettingsService) WithDen(den SettingsSource) *SettingsService {
 		s.den = den
 	}
 	return s
+}
+
+// SMTPPassword is the password overdue mail logs in with. envPassword is
+// SMTP_PASSWORD. fetch is the Den client's SMTPPassword; it is called only
+// when Den sets smtp.host and password_set. See denSMTPPassword.
+func (s *SettingsService) SMTPPassword(ctx context.Context, fetch func(context.Context) (string, error), envPassword string) (string, error) {
+	var ms *denlink.ModuleSettings
+	if s != nil && s.den != nil && s.den.Paired() {
+		ms = s.den.ModuleSettings()
+	}
+	return denSMTPPassword(ctx, ms, fetch, envPassword)
 }
 
 // Get returns the effective settings: Stash's stored values with defaults,

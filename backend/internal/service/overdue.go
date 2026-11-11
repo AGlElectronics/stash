@@ -36,12 +36,21 @@ type OverdueService struct {
 	settings     *SettingsService
 	sender       mail.Sender
 	smtpPassword string
+	denPassword  func(context.Context) (string, error)
 	appBaseURL   string
 	log          zerolog.Logger
 }
 
 func NewOverdueService(pool *pgxpool.Pool, settings *SettingsService, sender mail.Sender, smtpPassword, appBaseURL string, log zerolog.Logger) *OverdueService {
 	return &OverdueService{pool: pool, settings: settings, sender: sender, smtpPassword: smtpPassword, appBaseURL: strings.TrimRight(appBaseURL, "/"), log: log}
+}
+
+// WithDenPassword fetches Den's SMTP password when Den sets smtp.host and
+// password_set. fetch is denlink.Client.SMTPPassword. Without it, a Den
+// mail server that holds a password cannot be used.
+func (s *OverdueService) WithDenPassword(fetch func(context.Context) (string, error)) *OverdueService {
+	s.denPassword = fetch
+	return s
 }
 
 // List returns every overdue sign-out at time now, the oldest first.
@@ -102,9 +111,13 @@ func (s *OverdueService) SendReminders(ctx context.Context, now time.Time) (int,
 	if len(due) == 0 {
 		return 0, nil
 	}
+	password, err := s.settings.SMTPPassword(ctx, s.denPassword, s.smtpPassword)
+	if err != nil {
+		return 0, err
+	}
 	cfg := mail.Config{
 		Host: set.SMTPHost, Port: set.SMTPPort, Username: set.SMTPUsername,
-		Password: s.smtpPassword, From: set.SMTPFrom, TLS: set.SMTPTLS,
+		Password: password, From: set.SMTPFrom, TLS: set.SMTPTLS,
 	}
 	sent := 0
 	for _, o := range due {

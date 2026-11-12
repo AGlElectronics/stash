@@ -37,6 +37,11 @@ jobs:
       push: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
       version: ${{ inputs.version }}
       den-major: "1"
+      # v1.1.4, the ci-v1 default, panics on Go 1.27. Its golang.org/x/tools
+      # v0.29.0 SSA builder stops with "unexpected expr: *ast.KeyValueExpr"
+      # while loading the standard library, so the scan never finishes.
+      # v1.9.0 carries x/tools v0.52.0, which understands that syntax.
+      govulncheck-version: v1.9.0
       # Database tests (internal/testdb) run when this variable is set.
       test-database-env: STASH_TEST_DATABASE_URL
       # Self-hosted runners (ARC scale set). On GitHub-hosted runners use:

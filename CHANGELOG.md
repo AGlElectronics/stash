@@ -196,6 +196,11 @@ the same version. Rebuilds get no entry here.
 
 ### Changed
 
+- The Helm chart admits Den's backend (`networkPolicy.den`, on by default) so Den can read the role catalog and portal to-dos. Kustomize already did.
+- `.env.example` lists `SHUTDOWN_TIMEOUT` (default 15s).
+- CI passes `den-major: "1"`. A release whose MAJOR is not 1 is refused once the shared `ci-v1` tag points at the workflow that has that input.
+- Standalone Compose uses PostgreSQL `postgres:16.15-alpine`.
+- The Helm chart description says CI renders and lints the chart; the first production install is still pending.
 These matter if you ran a pre-release build of Stash.
 
 - `/silent-callback.html` may be framed by the Stash web app itself, so a

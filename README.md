@@ -39,7 +39,7 @@ app (`:3000`). Sign-in is `dev` mode: the first request creates the user
 `carol:frontdesk,readonly`) and reload. Dev mode is for your own computer
 only; real installations use `AUTH_MODE=oidc`.
 
-Without Docker: Go 1.27.3+, Node 22+, a PostgreSQL and an S3 endpoint, then
+Without Docker: Go 1.27.4+, Node 22+, a PostgreSQL and an S3 endpoint, then
 `cd backend && sqlc generate && go run ./cmd/server` and
 `cd frontend && npm install && npm run dev`.
 

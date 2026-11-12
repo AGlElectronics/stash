@@ -191,7 +191,7 @@ the same version. Rebuilds get no entry here.
   (`localhost:9000`, bucket `stash-data-dev`), and
   `infra/frontend-config/compose.json` (dev sign-in) mounted as the web
   app's `/config.json`; set `FRONTEND_CONFIG` in `.env` to use another
-  file. Building from source needs Go 1.27.3 or newer.
+  file. Building from source needs Go 1.27.4 or newer.
 - CI on every pull request (tests, lint, Trivy scans) and signed images with
   an SBOM published to GHCR on version tags (linux/amd64; linux/arm64
   optional).
@@ -286,6 +286,18 @@ These matter if you ran a pre-release build of Stash.
 
 ### Security
 
+- The backend is built with Go 1.27.4. Go 1.27.3's HTTP/1 server can
+  crash when `MaxBytesReader` sets `Connection: close` while a handler
+  writes response headers (GO-2026-6859, CVE-2026-97054).
+- `golang.org/x/crypto` is v0.59.0 (it was v0.58.0). v0.59.0 removes the
+  unmaintained `openpgp` package (GO-2026-5932). Stash does not call it;
+  MinIO uses this module for password hashing. The upgrade also moves
+  `golang.org/x/sync` to v0.25.0, `golang.org/x/sys` to v0.50.0 and
+  `golang.org/x/text` to v0.44.0.
+- The local lint images (`scripts/lint-backend.Dockerfile` and
+  `scripts/lint-frontend.Dockerfile`) declare a non-root user. They are
+  build tools, not services; a repository scan no longer reports them as
+  running as root.
 - Only people with `department.manage`, `category.manage` or
   `location.manage` can create departments, categories and locations,
   also by typing a new name in the item form. People who can only create
@@ -343,7 +355,7 @@ These matter if you ran a pre-release build of Stash.
   the platform's PostgreSQL refuses connections without TLS.
 - No image runs as root. The web app runs on
   `nginxinc/nginx-unprivileged:1.30.6-alpine` as UID 101 and listens on
-  port 8080. All images are built with Go 1.27.3 and pass the CI image
+  port 8080. All images are built with Go 1.27.4 and pass the CI image
   scan (Trivy, HIGH and CRITICAL issues that have a fix).
 - A production build never falls back to dev sign-in: a `/config.json`
   without `authMode` means OIDC.

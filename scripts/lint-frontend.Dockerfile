@@ -15,3 +15,7 @@ RUN npm install --silent --no-audit --no-fund
 COPY . .
 RUN npm run lint
 RUN npm run typecheck
+# Install and lint above run as root at build time. The finished image is
+# not a service. `node` (uid 1000) is the non-root user shipped in the
+# Node image, which is what the repository scan requires (Trivy DS-0002).
+USER node

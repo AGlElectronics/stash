@@ -24,12 +24,23 @@ RUN apk add --no-cache wget tar ca-certificates
 RUN wget -qO- "https://github.com/sqlc-dev/sqlc/releases/download/v${SQLC_VERSION}/sqlc_${SQLC_VERSION}_linux_amd64.tar.gz" \
     | tar -xz -C /usr/local/bin sqlc \
     && chmod +x /usr/local/bin/sqlc
+# The lint stage starts from this image and would inherit this user, so
+# that stage switches back to root for sqlc and golangci-lint, then drops
+# privileges again. A non-root USER is what the repository scan requires
+# (Trivy DS-0002). 65532 is a numeric id because this stage is not a
+# service and does not need a named account.
+USER 65532:65532
 
 FROM tooling AS lint
+USER root
 WORKDIR /src
 COPY . .
 RUN sqlc generate
 RUN golangci-lint run ./...
+USER 65532:65532
 
 FROM scratch AS sqlcgen-export
 COPY --from=lint /src/internal/repository/sqlcgen /
+# Scratch has no /etc/passwd. The numeric user is metadata for the scan;
+# buildx exports the files only, and the lint already ran in the stage above.
+USER 65532:65532

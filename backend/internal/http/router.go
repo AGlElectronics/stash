@@ -108,6 +108,7 @@ func NewRouter(deps Deps, version string) http.Handler {
 		// rate limited per client so a wrong token cannot be guessed fast.
 		catalogLimiter := authbase.NewRateLimiter(authbase.RateLimitOptions{Rate: 1, Burst: 20})
 		api.With(catalogLimiter.Middleware).Get("/role-catalog", roleCatalogAuth(deps.Config.HRServiceToken, authMW, roleCatalogHandler(deps.Access)))
+		api.Get("/internal/stats", internalStatsHandler(deps.Config.StatsPullToken, deps.Pool))
 		api.Get("/brand", den.BrandHandler("/api/brand"))
 		api.Get("/brand/{role}", den.AssetHandler)
 		api.Get("/den/state", den.StateHandler)

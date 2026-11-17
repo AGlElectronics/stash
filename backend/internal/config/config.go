@@ -1,4 +1,4 @@
-package config
+﻿package config
 
 import (
 	"errors"
@@ -58,7 +58,9 @@ type Config struct {
 	GroupMatch groupmatch.Config
 	// HRServiceToken lets HR read GET /api/role-catalog without a sign-in
 	// (HR_SERVICE_TOKEN). Empty: only signed-in staff may read it.
-	HRServiceToken string
+	HRServiceToken string
+	// StatsPullToken protects GET /api/internal/stats for Stats. Empty disables it.
+	StatsPullToken string
 
 	// Guest self-service Lost & Found lookup (/claim, /api/public/lostfound).
 	// Off by default; enable after the con or when kiosks are ready.
@@ -148,7 +150,8 @@ func Load() (*Config, error) {
 		AccessConfigPath:            accessConfigPath(),
 		DevDefaultUser:              getEnv("DEV_DEFAULT_USER", "dev-admin"),
 		GroupMatch:                  groups,
-		HRServiceToken:              strings.TrimSpace(getEnv("HR_SERVICE_TOKEN", "")),
+		HRServiceToken:              strings.TrimSpace(getEnv("HR_SERVICE_TOKEN", "")),
+		StatsPullToken:    strings.TrimSpace(getEnv("STATS_PULL_TOKEN", "")),
 		PublicLostFoundClaimEnabled: getEnvBool("PUBLIC_LOSTFOUND_CLAIM_ENABLED", false),
 		Den:                         den,
 		TelegramBotToken:            strings.TrimSpace(getEnv("TELEGRAM_BOT_TOKEN", "")),

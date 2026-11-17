@@ -21,6 +21,7 @@ import (
 	"github.com/AGlElectronics/stash/backend/internal/httperror"
 	"github.com/AGlElectronics/stash/backend/internal/repository/sqlcgen"
 	"github.com/AGlElectronics/stash/backend/internal/telegram"
+	"github.com/AGlElectronics/stash/backend/internal/tgcatchall"
 )
 
 // TelegramAPI is the part of the Bot API the Lost & Found bot uses.
@@ -40,6 +41,7 @@ type LostFoundTelegram struct {
 	settings *SettingsService
 	bot      TelegramAPI
 	log      zerolog.Logger
+	catchall *tgcatchall.Client
 
 	mu       sync.Mutex
 	username string
@@ -47,6 +49,13 @@ type LostFoundTelegram struct {
 
 func NewLostFoundTelegram(pool *pgxpool.Pool, settings *SettingsService, bot TelegramAPI, log zerolog.Logger) *LostFoundTelegram {
 	return &LostFoundTelegram{pool: pool, settings: settings, bot: bot, log: log}
+}
+
+// WithCatchall redirects guest notifies to the Compose Telegram catch-all
+// (dev only), prefixed with the intended guest chat id.
+func (t *LostFoundTelegram) WithCatchall(c *tgcatchall.Client) *LostFoundTelegram {
+	t.catchall = c
+	return t
 }
 
 // MaxNotifyLength caps a message from the desk.
@@ -246,18 +255,13 @@ func DefaultNotifyMessage(r sqlcgen.LostFoundReport) string {
 }
 
 // Notify sends a message to the guest who linked the report. Every message
-// is audited (lostfound.notify); the text itself is not stored.
+// is audited (lostfound.notify); the text itself is not stored. With the
+// Compose catch-all, the message goes to the test chat instead (Mailpit
+// and real guest DMs are unchanged for email / production).
 func (t *LostFoundTelegram) Notify(ctx context.Context, reportID uuid.UUID, message string) error {
 	message = strings.TrimSpace(message)
 	if utf8.RuneCountInString(message) > MaxNotifyLength {
 		return httperror.Validation(fmt.Sprintf("message must be at most %d characters", MaxNotifyLength), nil)
-	}
-	on, err := t.active(ctx)
-	if err != nil {
-		return err
-	}
-	if !on {
-		return httperror.Conflict("the Telegram bot is off (Settings → Privacy and notifications) or TELEGRAM_BOT_TOKEN is not set")
 	}
 	q := sqlcgen.New(t.pool)
 	r, err := q.GetLostFoundReport(ctx, reportID)
@@ -267,11 +271,30 @@ func (t *LostFoundTelegram) Notify(ctx context.Context, reportID uuid.UUID, mess
 	if err != nil {
 		return httperror.Internal(err)
 	}
-	if r.TelegramChatID == nil {
-		return httperror.Conflict("the guest has not linked this report on Telegram yet")
-	}
 	if message == "" {
 		message = DefaultNotifyMessage(r)
+	}
+	if t.catchall.Enabled() {
+		intended := fmt.Sprintf("Stash Lost & Found · %s · (guest not linked)", r.ReportNumber)
+		if r.TelegramChatID != nil {
+			intended = fmt.Sprintf("Stash Lost & Found · %s · guest chat %d", r.ReportNumber, *r.TelegramChatID)
+		}
+		if err := t.catchall.Send(ctx, intended, message); err != nil {
+			t.log.Warn().Err(err).Str("report", r.ReportNumber).Msg("telegram catch-all: notify failed")
+			return httperror.New(httperror.CodeConflict, "Telegram did not accept the message; the guest may have blocked the bot")
+		}
+		note := fmt.Sprintf("Telegram catch-all message sent (%d characters)", utf8.RuneCountInString(message))
+		return audit.Record(ctx, q, "lostfound.notify", "lostfound", reportID, nil, nil, note)
+	}
+	on, err := t.active(ctx)
+	if err != nil {
+		return err
+	}
+	if !on {
+		return httperror.Conflict("the Telegram bot is off (Settings → Privacy and notifications) or TELEGRAM_BOT_TOKEN is not set")
+	}
+	if r.TelegramChatID == nil {
+		return httperror.Conflict("the guest has not linked this report on Telegram yet")
 	}
 	if err := t.bot.SendMessage(ctx, *r.TelegramChatID, message); err != nil {
 		t.log.Warn().Err(err).Str("report", r.ReportNumber).Msg("telegram: notify failed")

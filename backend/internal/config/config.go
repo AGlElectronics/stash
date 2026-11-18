@@ -1,4 +1,4 @@
-﻿package config
+package config
 
 import (
 	"errors"
@@ -58,7 +58,8 @@ type Config struct {
 	GroupMatch groupmatch.Config
 	// HRServiceToken lets HR read GET /api/role-catalog without a sign-in
 	// (HR_SERVICE_TOKEN). Empty: only signed-in staff may read it.
-	HRServiceToken string
+	HRServiceToken string
+
 	// StatsPullToken protects GET /api/internal/stats for Stats. Empty disables it.
 	StatsPullToken string
 
@@ -133,25 +134,26 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		AppEnv:                      auth.AppEnv,
-		AppBaseURL:                  getEnv("APP_BASE_URL", "http://localhost:8080"),
-		HTTPAddr:                    getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:                 getEnv("DATABASE_URL", ""),
-		S3Endpoint:                  getEnv("S3_ENDPOINT", ""),
-		S3Bucket:                    getEnv("S3_BUCKET", ""),
-		S3AccessKeyID:               getEnv("S3_ACCESS_KEY_ID", ""),
-		S3SecretAccessKey:           getEnv("S3_SECRET_ACCESS_KEY", ""),
-		S3Region:                    getEnv("S3_REGION", "us-east-1"),
-		S3UsePathStyle:              getEnvBool("S3_USE_PATH_STYLE", true),
-		AuthMode:                    auth.AuthMode,
-		OIDCIssuerURL:               getEnv("OIDC_ISSUER_URL", ""),
-		OIDCClientID:                getEnv("OIDC_CLIENT_ID", ""),
-		OIDCAudience:                getEnv("OIDC_AUDIENCE", DefaultAudience),
-		AccessConfigPath:            accessConfigPath(),
-		DevDefaultUser:              getEnv("DEV_DEFAULT_USER", "dev-admin"),
-		GroupMatch:                  groups,
-		HRServiceToken:              strings.TrimSpace(getEnv("HR_SERVICE_TOKEN", "")),
-		StatsPullToken:    strings.TrimSpace(getEnv("STATS_PULL_TOKEN", "")),
+		AppEnv:            auth.AppEnv,
+		AppBaseURL:        getEnv("APP_BASE_URL", "http://localhost:8080"),
+		HTTPAddr:          getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:       getEnv("DATABASE_URL", ""),
+		S3Endpoint:        getEnv("S3_ENDPOINT", ""),
+		S3Bucket:          getEnv("S3_BUCKET", ""),
+		S3AccessKeyID:     getEnv("S3_ACCESS_KEY_ID", ""),
+		S3SecretAccessKey: getEnv("S3_SECRET_ACCESS_KEY", ""),
+		S3Region:          getEnv("S3_REGION", "us-east-1"),
+		S3UsePathStyle:    getEnvBool("S3_USE_PATH_STYLE", true),
+		AuthMode:          auth.AuthMode,
+		OIDCIssuerURL:     getEnv("OIDC_ISSUER_URL", ""),
+		OIDCClientID:      getEnv("OIDC_CLIENT_ID", ""),
+		OIDCAudience:      getEnv("OIDC_AUDIENCE", DefaultAudience),
+		AccessConfigPath:  accessConfigPath(),
+		DevDefaultUser:    getEnv("DEV_DEFAULT_USER", "dev-admin"),
+		GroupMatch:        groups,
+		HRServiceToken:    strings.TrimSpace(getEnv("HR_SERVICE_TOKEN", "")),
+
+		StatsPullToken:              strings.TrimSpace(getEnv("STATS_PULL_TOKEN", "")),
 		PublicLostFoundClaimEnabled: getEnvBool("PUBLIC_LOSTFOUND_CLAIM_ENABLED", false),
 		Den:                         den,
 		TelegramBotToken:            strings.TrimSpace(getEnv("TELEGRAM_BOT_TOKEN", "")),

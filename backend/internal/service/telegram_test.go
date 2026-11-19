@@ -109,7 +109,12 @@ func TestTelegramLinkNotifyUnlink(t *testing.T) {
 	if n := countRows(t, pool, `SELECT count(*) FROM audit_log WHERE action = 'lostfound.notify' AND entity_id = $1`, id); n != 1 {
 		t.Fatalf("notify audit rows = %d, want 1", n)
 	}
-	if n := countRows(t, pool, `SELECT count(*) FROM audit_log WHERE after_json::text LIKE '%777%' OR before_json::text LIKE '%777%'`); n != 0 {
+	// Match the JSON field, not a bare "777" substring (UUIDs in after_json
+	// can contain those digits and made this flake under -race).
+	if n := countRows(t, pool, `
+		SELECT count(*) FROM audit_log
+		WHERE coalesce(before_json::text,'') || coalesce(after_json::text,'')
+		      ~ '"telegram_chat_id"\s*:\s*777'`); n != 0 {
 		t.Fatal("chat ids must not reach the audit log")
 	}
 

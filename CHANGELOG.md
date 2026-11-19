@@ -355,6 +355,8 @@ These matter if you ran a pre-release build of Stash.
 
 ### Fixed
 
+- Lost & Found Telegram audit test no longer false-positives when a UUID contains the digits of a chat id.
+
 - The web app image's fallback security-header files, used when
   `/etc/nginx/snippets` cannot be written, now strip `${S3_ORIGIN}` as
   well. A digit in that name used to leave the token in the policy, and

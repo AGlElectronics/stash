@@ -60,6 +60,9 @@ type Config struct {
 	// (HR_SERVICE_TOKEN). Empty: only signed-in staff may read it.
 	HRServiceToken string
 
+	// StatsPullToken protects GET /api/internal/stats for Stats. Empty disables it.
+	StatsPullToken string
+
 	// Guest self-service Lost & Found lookup (/claim, /api/public/lostfound).
 	// Off by default; enable after the con or when kiosks are ready.
 	PublicLostFoundClaimEnabled bool
@@ -131,24 +134,26 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		AppEnv:                      auth.AppEnv,
-		AppBaseURL:                  getEnv("APP_BASE_URL", "http://localhost:8080"),
-		HTTPAddr:                    getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:                 getEnv("DATABASE_URL", ""),
-		S3Endpoint:                  getEnv("S3_ENDPOINT", ""),
-		S3Bucket:                    getEnv("S3_BUCKET", ""),
-		S3AccessKeyID:               getEnv("S3_ACCESS_KEY_ID", ""),
-		S3SecretAccessKey:           getEnv("S3_SECRET_ACCESS_KEY", ""),
-		S3Region:                    getEnv("S3_REGION", "us-east-1"),
-		S3UsePathStyle:              getEnvBool("S3_USE_PATH_STYLE", true),
-		AuthMode:                    auth.AuthMode,
-		OIDCIssuerURL:               getEnv("OIDC_ISSUER_URL", ""),
-		OIDCClientID:                getEnv("OIDC_CLIENT_ID", ""),
-		OIDCAudience:                getEnv("OIDC_AUDIENCE", DefaultAudience),
-		AccessConfigPath:            accessConfigPath(),
-		DevDefaultUser:              getEnv("DEV_DEFAULT_USER", "dev-admin"),
-		GroupMatch:                  groups,
-		HRServiceToken:              strings.TrimSpace(getEnv("HR_SERVICE_TOKEN", "")),
+		AppEnv:            auth.AppEnv,
+		AppBaseURL:        getEnv("APP_BASE_URL", "http://localhost:8080"),
+		HTTPAddr:          getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:       getEnv("DATABASE_URL", ""),
+		S3Endpoint:        getEnv("S3_ENDPOINT", ""),
+		S3Bucket:          getEnv("S3_BUCKET", ""),
+		S3AccessKeyID:     getEnv("S3_ACCESS_KEY_ID", ""),
+		S3SecretAccessKey: getEnv("S3_SECRET_ACCESS_KEY", ""),
+		S3Region:          getEnv("S3_REGION", "us-east-1"),
+		S3UsePathStyle:    getEnvBool("S3_USE_PATH_STYLE", true),
+		AuthMode:          auth.AuthMode,
+		OIDCIssuerURL:     getEnv("OIDC_ISSUER_URL", ""),
+		OIDCClientID:      getEnv("OIDC_CLIENT_ID", ""),
+		OIDCAudience:      getEnv("OIDC_AUDIENCE", DefaultAudience),
+		AccessConfigPath:  accessConfigPath(),
+		DevDefaultUser:    getEnv("DEV_DEFAULT_USER", "dev-admin"),
+		GroupMatch:        groups,
+		HRServiceToken:    strings.TrimSpace(getEnv("HR_SERVICE_TOKEN", "")),
+
+		StatsPullToken:              strings.TrimSpace(getEnv("STATS_PULL_TOKEN", "")),
 		PublicLostFoundClaimEnabled: getEnvBool("PUBLIC_LOSTFOUND_CLAIM_ENABLED", false),
 		Den:                         den,
 		TelegramBotToken:            strings.TrimSpace(getEnv("TELEGRAM_BOT_TOKEN", "")),
@@ -184,6 +189,9 @@ func (c *Config) validate(errs []string) error {
 	}
 	if c.HRServiceToken != "" && len(c.HRServiceToken) < MinHRServiceTokenLength {
 		errs = append(errs, fmt.Sprintf("HR_SERVICE_TOKEN must be at least %d characters (generate one with: openssl rand -base64 32)", MinHRServiceTokenLength))
+	}
+	if c.StatsPullToken != "" && len(c.StatsPullToken) < MinHRServiceTokenLength {
+		errs = append(errs, fmt.Sprintf("STATS_PULL_TOKEN must be at least %d characters (openssl rand -hex 32)", MinHRServiceTokenLength))
 	}
 	if c.AuthMode == AuthModeOIDC {
 		if c.OIDCIssuerURL == "" {

@@ -25,6 +25,7 @@ import (
 	"github.com/AGlElectronics/stash/backend/internal/mail"
 	"github.com/AGlElectronics/stash/backend/internal/service"
 	"github.com/AGlElectronics/stash/backend/internal/telegram"
+	"github.com/AGlElectronics/stash/backend/internal/tgcatchall"
 	"github.com/AGlElectronics/stash/backend/internal/tlscert"
 )
 
@@ -116,7 +117,11 @@ func Run(ctx context.Context, logger zerolog.Logger) error {
 	if cfg.TelegramBotToken != "" {
 		bot = telegram.New(cfg.TelegramBotToken, cfg.TelegramAPIURL)
 	}
-	lfBot := service.NewLostFoundTelegram(pool, settings, bot, logger)
+	catchall := tgcatchall.New(tgcatchall.FromEnv(os.Getenv))
+	lfBot := service.NewLostFoundTelegram(pool, settings, bot, logger).WithCatchall(catchall)
+	if catchall.Enabled() {
+		logger.Info().Msg("Telegram dev catch-all on: Lost & Found notifies also go to the test chat")
+	}
 	overdue := service.NewOverdueService(pool, settings, mail.SMTP{}, cfg.SMTPPassword, cfg.AppBaseURL, logger).
 		WithDenPassword(den.SMTPPassword)
 	if cfg.JobsEnabled {
